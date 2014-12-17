@@ -57,7 +57,7 @@ The ClrRuntime and ClrHeap are accessible from ClrMDSession's properties.
 ClrObject
 ----------------
 
-In ClrMD, you typically always access object's properties by its ClrType and object address.
+In ClrMD, you always access object properties by its ClrType and object address.
 
 ```c#
 ClrHeap heap = runtime.GetHeap();
@@ -78,4 +78,74 @@ foreach (ClrObject obj in session.AllObjects)
 }
 ```
 
-... more to come
+`ClrObject` implements DynamicObject, you can access instance fields like this
+
+```c#
+ulong address = 0x12345678;
+ClrObject o = session.Heap.GetClrObject(address);
+Console.WriteLine(o.Dynamic._someField);
+
+//You can also use the non-dynamic way
+Console.WriteLine(o["_someField"]);
+
+// Note that the field accessor also returns a ClrObject which can be used to access other inner fields
+// or to cast it into a primitive type.
+```
+
+If `ClrObject` represent a primitive value (string, byte, int, long, etc), you can directly cast it
+into its primitive type.
+
+```c#
+// Print all the strings of the Heap
+foreach (ClrObject obj in session.EnumerateClrObjects("System.String"))
+{
+    Console.WriteLine((string)obj);
+}
+```
+
+Arrays are also handled by `ClrObject`.
+
+```c#
+ClrObject anArray = session.Heap.GetClrObject(0x11223344);
+
+// You can manipulate the ClrObject like an array
+if (anArray.ArrayLength > 0)
+    Console.WriteLine(anArray[0]); // Print the object at index 0
+
+// And enumerate all the items
+foreach (ClrObject item in anArray)
+{
+    // ClrObject.GetDetailedString() will print the object address, type and fields
+    Console.WriteLine(item.GetDetailedString());
+}
+```
+
+Putting it together
+================
+
+Ok, let's get to more powerful stuff. 
+
+A common investigation in a memory dump is searching for memory leaks. Most memory profiler will show you the list
+of objects by type with instance count and total memory usage. This is exactly what we'll do in 10 lines of code!
+
+```c#
+var stats = from o in session.AllObjects // Start with all objects
+            // Group by object type.
+            group o by o.Type into typeGroup
+            // Get the instance count of this type.
+            let count = typeGroup.Count()
+            // Get the memory usage of all instances of this type
+            let totalSize = typeGroup.Sum(item => (int)item.Size)
+            // Orderby to get objects with most instance count first
+            orderby count descending
+            select new
+            {
+                Type = typeGroup.Key.Name,
+                Count = count,
+                TotalSize = ((double)totalSize / 1024 / 1024).ToString("0.## MB"),
+                // Get the first 100 instances of the type.
+                First100Objects = typeGroup.Take(100),
+            }
+```
+
+More to come...
