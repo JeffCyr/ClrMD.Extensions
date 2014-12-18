@@ -769,7 +769,7 @@ namespace ClrMD.Extensions
                 }
             }
 
-            if (LinqPadExtensions.DisplayReferenceByField && Type.IsObjectReference)
+            if (LinqPadExtensions.DisplayReferencedByField && Type.IsObjectReference)
             {
                 yield return "ReferencedBy";
             }
@@ -815,7 +815,7 @@ namespace ClrMD.Extensions
                 }
             }
 
-            if (LinqPadExtensions.DisplayReferenceByField && Type.IsObjectReference)
+            if (LinqPadExtensions.DisplayReferencedByField && Type.IsObjectReference)
             {
                 yield return typeof(IEnumerable<ClrObjectWrapper>);
             }
@@ -852,7 +852,7 @@ namespace ClrMD.Extensions
                 }
             }
 
-            if (LinqPadExtensions.DisplayReferenceByField && Type.IsObjectReference)
+            if (LinqPadExtensions.DisplayReferencedByField && Type.IsObjectReference)
             {
                 yield return EnumerateReferenceBy().Select(item => new { Type = item.m_deobfuscator.OriginalName, Object = item });
             }
