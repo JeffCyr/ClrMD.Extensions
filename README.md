@@ -129,6 +129,8 @@ A common investigation in a memory dump is searching for memory leaks. Most memo
 of objects by type with instance count and total memory usage. This is exactly what we'll do in 10 lines of code!
 
 ```c#
+ClrMDSession session = ClrMDSession.LoadCrashDump(@"C:\Dumps\YourDumpFile.dmp");
+
 var stats = from o in session.AllObjects // Start with all objects
             // Group by object type.
             group o by o.Type into typeGroup
@@ -148,4 +150,16 @@ var stats = from o in session.AllObjects // Start with all objects
             }
 ```
 
-More to come...
+What about LINQPad?
+================
+
+LINQPad is amazing with ClrMD for two reasons:
+- The Result view is a nice and easy way to display objects and navigate through them.
+- When you modify and re-run a query, the new code is compiled and executed in the same AppDomain it was executed before.
+  ClrMD.Extensions leverage this by caching data in static storage, so when you run a query for the first time,
+  it may take a bit longer to initialize all the objects, but for the next executions most operation will be instantaneous.
+
+Here is what the Result view looks like if I run the query above:
+![LINQPad Preview](https://raw.githubusercontent.com/JeffCyr/ClrMD.Extensions/master/img/LINQPad_Preview.png)
+
+
