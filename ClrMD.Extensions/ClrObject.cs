@@ -771,7 +771,7 @@ namespace ClrMD.Extensions
 
             if (LinqPadExtensions.DisplayReferenceByField && Type.IsObjectReference)
             {
-                yield return "ReferenceBy";
+                yield return "ReferencedBy";
             }
         }
 
