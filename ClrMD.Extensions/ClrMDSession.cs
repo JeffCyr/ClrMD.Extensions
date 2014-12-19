@@ -57,7 +57,10 @@ namespace ClrMD.Extensions
         public static ClrMDSession LoadCrashDump(string dumpPath)
         {
             if (s_currentSession != null && s_lastDumpPath == dumpPath)
+            {
+                TestInvalidComObjectException();
                 return s_currentSession;
+            }
 
             Detach();
 
@@ -114,7 +117,10 @@ namespace ClrMD.Extensions
         public static ClrMDSession AttachToProcess(Process p, uint millisecondsTimeout = 5000, AttachFlag attachFlag = AttachFlag.Invasive)
         {
             if (s_currentSession != null && s_lastProcessId == p.Id)
+            {
+                TestInvalidComObjectException();
                 return s_currentSession;
+            }
 
             Detach();
 
@@ -235,6 +241,30 @@ namespace ClrMD.Extensions
         {
             if (s_currentSession != null)
                 s_currentSession.Dispose();
+        }
+
+        private static void TestInvalidComObjectException()
+        {
+            if (s_currentSession == null)
+                return;
+
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            {
+                try
+                {
+                    byte[] dummy = new byte[8];
+                    int bytesRead;
+                    s_currentSession.Runtime.ReadMemory(0, dummy, 8, out bytesRead);
+                }
+                catch (InvalidComObjectException ex)
+                {
+                    const string msg = @"It looks like ClrMDSession was created from another STA Thread. 
+If you are using LINQPad, change this setting: 
+LINQPad Menu -> Edit -> Preferences -> Advanced -> Run Queries in MTA Threads = True";
+
+                    throw new InvalidOperationException(msg, ex);
+                }
+            }
         }
 
         public static void RunInMTA(Action action)
