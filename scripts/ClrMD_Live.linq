@@ -9,17 +9,17 @@
 void Main()
 {
     // ClrMDSession is a singleton and is only created on the first query execution.
-	// Calling 'AttachToProcess' again will return the already initialized ClrMDSession (if it's the same process id).
-	ClrMDSession session = ClrMDSession.AttachToProcess("ProcessName");
+    // Calling 'AttachToProcess' again will return the already initialized ClrMDSession (if it's the same process id).
+    ClrMDSession session = ClrMDSession.AttachToProcess("ProcessName");
     
-	session.DumpThreads();
+    session.DumpThreads();
     session.DumpHeapStatistics();
 
-	// The process is paused when we attach the ClrMDSession.
-	// Call Detach to unpause the process (Note that you will not be able to expand objects in the result view anymore).
-	
-	// Tip: You don't have to uncomment this line, when you want to detach, simply select 'ClrMDSession.Detach' and hit F5.
-	//      LINQPad will only execute the selection.
+    // The process is paused when we attach the ClrMDSession.
+    // Call Detach to unpause the process (Note that you will not be able to expand objects in the result view anymore).
+    
+    // Tip: You don't have to uncomment this line, when you want to detach, simply select 'ClrMDSession.Detach' and hit F5.
+    //      LINQPad will only execute the selection.
     //ClrMDSession.Detach();
 }
 

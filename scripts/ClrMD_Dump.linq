@@ -8,8 +8,8 @@
 
 void Main()
 {
-	// ClrMDSession is a singleton and is only created on the first query execution.
-	// Calling 'LoadCrashDump' again will return the already initialized ClrMDSession (if it's the same dump path).
+    // ClrMDSession is a singleton and is only created on the first query execution.
+    // Calling 'LoadCrashDump' again will return the already initialized ClrMDSession (if it's the same dump path).
     ClrMDSession session = ClrMDSession.LoadCrashDump(@"C:\Dumps\YourDumpFile.dmp");
     
     session.DumpThreads();
