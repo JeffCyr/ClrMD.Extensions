@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using ClrMD.Extensions.Core;
@@ -14,6 +15,7 @@ namespace ClrMD.Extensions
     {
         private static ClrMDSession s_currentSession;
         private static string s_lastDumpPath;
+        private static int? s_lastProcessId;
 
         public static ClrMDSession Current
         {
@@ -41,6 +43,8 @@ namespace ClrMD.Extensions
 
         public ClrMDSession(DataTarget target, ClrRuntime runtime)
         {
+            ClrMDSession.Detach();
+
             Target = target;
             Runtime = runtime;
             Heap = Runtime.GetHeap();
@@ -52,26 +56,20 @@ namespace ClrMD.Extensions
 
         public static ClrMDSession LoadCrashDump(string dumpPath)
         {
-            if (s_currentSession != null)
-            {
-                if (s_lastDumpPath == dumpPath)
-                {
-                    return s_currentSession;
-                }
+            if (s_currentSession != null && s_lastDumpPath == dumpPath)
+                return s_currentSession;
 
-                s_currentSession.Dispose();
-                s_currentSession = null;
-            }
+            Detach();
 
-            string dacFile;
             DataTarget target = DataTarget.LoadCrashDump(dumpPath);
+            string dacFile;
 
             try
             {
                 if (target.Architecture == Architecture.X86 && Environment.Is64BitProcess ||
                     target.Architecture == Architecture.Amd64 && !Environment.Is64BitProcess)
                 {
-                    throw new InvalidOperationException("Mismatched architecture between this process and the target process.");
+                    throw new InvalidOperationException("Mismatched architecture between this process and the target dump.");
                 }
 
                 dacFile = target.ClrVersions[0].TryGetDacLocation();
@@ -90,8 +88,7 @@ namespace ClrMD.Extensions
             }
 
             s_lastDumpPath = dumpPath;
-            s_currentSession = new ClrMDSession(target, dacFile);
-            return s_currentSession;
+            return new ClrMDSession(target, dacFile);
         }
 
         public static ClrMDSession AttachToProcess(string processName, uint millisecondsTimeout = 5000, AttachFlag attachFlag = AttachFlag.Invasive)
@@ -101,26 +98,45 @@ namespace ClrMD.Extensions
             if (p == null)
                 throw new ArgumentException("Process not found", "processName");
 
-            return AttachToProcess(p.Id, millisecondsTimeout, attachFlag);
+            return AttachToProcess(p, millisecondsTimeout, attachFlag);
         }
 
         public static ClrMDSession AttachToProcess(int pid, uint millisecondsTimeout = 5000, AttachFlag attachFlag = AttachFlag.Invasive)
         {
-            if (s_currentSession != null)
-                {
-                    s_currentSession.Dispose();
-                    s_currentSession = null;
-                    s_lastDumpPath = null;
-                }
+            Process p = Process.GetProcessById(pid);
 
-            DataTarget target = DataTarget.AttachToProcess(pid, millisecondsTimeout, attachFlag);
-            string dacFile = target.ClrVersions[0].TryGetDacLocation();
+            if (p == null)
+                throw new ArgumentException("Process not found", "pid");
 
-            if (dacFile == null)
-                throw new InvalidOperationException("Unable to find dac file.");
+            return AttachToProcess(p, millisecondsTimeout, attachFlag);
+        }
 
-            s_currentSession = new ClrMDSession(target, dacFile);
-            return s_currentSession;
+        public static ClrMDSession AttachToProcess(Process p, uint millisecondsTimeout = 5000, AttachFlag attachFlag = AttachFlag.Invasive)
+        {
+            if (s_currentSession != null && s_lastProcessId == p.Id)
+                return s_currentSession;
+
+            Detach();
+
+            DataTarget target = DataTarget.AttachToProcess(p.Id, millisecondsTimeout, attachFlag);
+            string dacFile;
+
+            try
+            {
+                dacFile = target.ClrVersions[0].TryGetDacLocation();
+
+                if (dacFile == null)
+                    throw new InvalidOperationException("Unable to find dac file. This may be caused by mismatched architecture between this process and the target process.");
+            }
+            catch
+            {
+                target.Dispose();
+                throw;
+            }
+            
+
+            s_lastProcessId = p.Id;
+            return new ClrMDSession(target, dacFile);
         }
 
         public IEnumerable<ClrObject> EnumerateClrObjects(string typeName)
@@ -210,7 +226,15 @@ namespace ClrMD.Extensions
 
             s_currentSession = null;
             s_lastDumpPath = null;
+            s_lastProcessId = null;
+
             GC.SuppressFinalize(this);
+        }
+
+        public static void Detach()
+        {
+            if (s_currentSession != null)
+                s_currentSession.Dispose();
         }
 
         public static void RunInMTA(Action action)
