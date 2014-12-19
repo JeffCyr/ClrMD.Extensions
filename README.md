@@ -1,5 +1,4 @@
-ClrMD
-================
+# ClrMD
 
 ClrMD is a .Net library used to collect information from a live process or a memory dump file. It's like Windbg/sos.dll,
 but instead of cryptic commands you get a fully object oriented API to collect and combine data.
@@ -9,13 +8,11 @@ Here is some resources to get you started:
  - https://github.com/Microsoft/dotnetsamples/tree/master/Microsoft.Diagnostics.Runtime/CLRMD
 
 
-ClrMD.Extensions
-================
+# ClrMD.Extensions
 
 The goal of this library is to provide integration with LINPad and to make ClrMD even more easy to use.
 
-ClrMDSession
-----------------
+## ClrMDSession
 
 `ClrMDSession` will take care of the initialization of ClrMD.
 
@@ -54,8 +51,7 @@ if it can't be found locally.
 The ClrRuntime and ClrHeap are accessible from ClrMDSession's properties.
 
 
-ClrObject
-----------------
+## ClrObject
 
 In ClrMD, you always access object properties by its ClrType and object address.
 
@@ -120,8 +116,7 @@ foreach (ClrObject item in anArray)
 }
 ```
 
-Putting it together
-================
+# Putting it together
 
 Ok, let's get to more powerful stuff. 
 
@@ -150,8 +145,9 @@ var stats = from o in session.AllObjects // Start with all objects
             }
 ```
 
-What about LINQPad?
-================
+# What about LINQPad?
+
+See [GettingStartedWithLINQPad](./doc/GettingStartedWithLINQPad.md)
 
 LINQPad is amazing with ClrMD for two reasons:
 - The Result view is a nice and easy way to display objects and navigate through them.
@@ -160,6 +156,4 @@ LINQPad is amazing with ClrMD for two reasons:
   it may take a bit longer to initialize all the objects, but for the next executions most operation will be instantaneous.
 
 Here is what the Result view looks like if I run the query above:
-![LINQPad Preview](https://raw.githubusercontent.com/JeffCyr/ClrMD.Extensions/master/img/LINQPad_Preview.png)
-
-
+![LINQPad Preview](./img/LINQPad_Preview.png)
