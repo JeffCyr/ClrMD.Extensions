@@ -10,6 +10,12 @@ namespace ClrMD.Extensions
 {
     public static class ClrMDExtensions
     {
+        public static IEnumerable<T> Cast<T>(this IEnumerable<ClrObject> source)
+        {
+            foreach (var item in source)
+                yield return (T)(dynamic)item;
+        }
+
         public static ClrType GetSafeObjectType(this ClrHeap heap, ulong address)
         {
             return heap.GetObjectType(address) ?? new UnknownType(heap);
