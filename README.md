@@ -156,4 +156,4 @@ LINQPad is amazing with ClrMD for two reasons:
   it may take a bit longer to initialize all the objects, but for the next executions most operation will be instantaneous.
 
 Here is what the Result view looks like if I run the query above:
-![LINQPad Preview](./img/LINQPad_Preview.png)
+![LINQPad Preview](https://raw.githubusercontent.com/JeffCyr/ClrMD.Extensions/master/img/LINQPad_Preview.png)
