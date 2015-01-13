@@ -132,14 +132,14 @@ var stats = from o in session.AllObjects // Start with all objects
             // Get the instance count of this type.
             let count = typeGroup.Count()
             // Get the memory usage of all instances of this type
-            let totalSize = typeGroup.Sum(item => (int)item.Size)
+            let totalSize = typeGroup.Sum(item => (double)item.Size)
             // Orderby to get objects with most instance count first
             orderby count descending
             select new
             {
                 Type = typeGroup.Key.Name,
                 Count = count,
-                TotalSize = ((double)totalSize / 1024 / 1024).ToString("0.## MB"),
+                TotalSize = (totalSize / 1024 / 1024).ToString("0.## MB"),
                 // Get the first 100 instances of the type.
                 First100Objects = typeGroup.Take(100),
             }
