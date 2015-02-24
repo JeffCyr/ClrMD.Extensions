@@ -54,7 +54,7 @@ namespace ClrMD.Extensions
             s_currentSession = this;
         }
 
-        public static ClrMDSession LoadCrashDump(string dumpPath)
+        public static ClrMDSession LoadCrashDump(string dumpPath, string dacFile = null)
         {
             if (s_currentSession != null && s_lastDumpPath == dumpPath)
             {
@@ -65,7 +65,6 @@ namespace ClrMD.Extensions
             Detach();
 
             DataTarget target = DataTarget.LoadCrashDump(dumpPath);
-            string dacFile;
 
             try
             {
@@ -75,7 +74,9 @@ namespace ClrMD.Extensions
                     throw new InvalidOperationException("Mismatched architecture between this process and the target dump.");
                 }
 
-                dacFile = target.ClrVersions[0].TryGetDacLocation();
+                if (dacFile == null)
+                    dacFile = target.ClrVersions[0].TryGetDacLocation();
+
                 if (string.IsNullOrEmpty(dacFile))
                 {
                     using (var locator = DacLocator.FromPublicSymbolServer("Symbols"))
