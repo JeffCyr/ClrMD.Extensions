@@ -75,10 +75,10 @@ namespace ClrMD.Extensions
                                                        : LoadLibrary("x86\\dbghelp.dll");
 
             if (dbghelpModule.IsInvalid)
-                throw new Win32Exception(String.Format("Could not load dbghelp.dll: {0}", Marshal.GetLastWin32Error()));
+                throw new InvalidOperationException("Could not load dbghelp.dll", new Win32Exception(Marshal.GetLastWin32Error()));
 
             if (!SymInitialize(ourProcess.Handle, searchPath, false))
-                throw new Win32Exception(String.Format("SymInitialize() failed: {0}", Marshal.GetLastWin32Error()));
+                throw new InvalidOperationException("SymInitialize: Unexpected error occured.", new Win32Exception(Marshal.GetLastWin32Error()));
         }
 
         private static void CreateFiles()
@@ -132,7 +132,7 @@ namespace ClrMD.Extensions
             }
         }
 
-        public static DacLocator FromPublicSymbolServer(String localCache)
+        public static DacLocator FromPublicSymbolServer(string localCache)
         {
             return new DacLocator(String.Format("SRV*{0}*http://msdl.microsoft.com/download/symbols", localCache));
         }
@@ -141,7 +141,7 @@ namespace ClrMD.Extensions
             String ntSymbolPath = Environment.GetEnvironmentVariable("_NT_SYMBOL_PATH");
             return new DacLocator(ntSymbolPath);
         }
-        public static DacLocator FromSearchPath(String searchPath)
+        public static DacLocator FromSearchPath(string searchPath)
         {
             return new DacLocator(searchPath);
         }
@@ -155,7 +155,7 @@ namespace ClrMD.Extensions
 
             return dac;
         }
-        public string FindDac(String dacname, uint timestamp, uint fileSize)
+        public string FindDac(string dacname, uint timestamp, uint fileSize)
         {
             // attemp using the symbol server
             StringBuilder symbolFile = new StringBuilder(2048);
@@ -165,7 +165,7 @@ namespace ClrMD.Extensions
                 return symbolFile.ToString();
             }
 
-            throw new Win32Exception(string.Format("SymFindFileInPath() failed: {0}", Marshal.GetLastWin32Error()));
+            throw new InvalidOperationException(string.Format("Unable to find dac file '{0}' in symbol server.", dacname), new Win32Exception(Marshal.GetLastWin32Error()));
         }
 
         public void Dispose()
