@@ -46,6 +46,9 @@ You can start with these scripts and 'Clone' (Ctrl+Shift+C) the query when you w
 
 ## Change LINQPad settings to use MTA threads
 
+> **This step is no longer required for LINQPad version 4.55.3 and up because the STA thread running
+> the query is now reused.**
+
 LINQPad launch each query execution in a new STA thread by default. Since ClrMD uses COM objects,
 the ClrMDSession is created in a query execution and it will fail in a second query execution because
 the COM objects will be accessed from another STA threads. The workaround I found is to configure
