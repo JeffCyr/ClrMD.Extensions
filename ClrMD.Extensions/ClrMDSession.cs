@@ -83,8 +83,6 @@ namespace ClrMD.Extensions
                 if (dacFile == null)
                     dacFile = target.ClrVersions[0].TryGetDacLocation();
 
-                Console.WriteLine(dacFile);
-
                 if (string.IsNullOrEmpty(dacFile))
                 {
                     using (var locator = DacLocator.FromPublicSymbolServer("Symbols"))
