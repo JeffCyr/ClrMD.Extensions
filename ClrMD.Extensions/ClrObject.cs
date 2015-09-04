@@ -145,18 +145,18 @@ namespace ClrMD.Extensions
             string obfuscatedName;
 
             if (m_deobfuscator.TryObfuscateField(fieldName, out obfuscatedName))
-            {
                 field = Type.GetFieldByName(obfuscatedName);
 
-                if (field == null)
-                    field = Type.GetFieldByName(GetAutomaticPropertyField(obfuscatedName));
-            }
+            string backingFieldName = GetAutomaticPropertyField(fieldName);
+
+            if (m_deobfuscator.TryObfuscateField(backingFieldName, out obfuscatedName))
+                field = Type.GetFieldByName(obfuscatedName);
 
             if (field == null)
                 field = Type.GetFieldByName(fieldName);
 
             if (field == null)
-                field = Type.GetFieldByName(GetAutomaticPropertyField(fieldName));
+                field = Type.GetFieldByName(backingFieldName);
 
             return field;
         }
