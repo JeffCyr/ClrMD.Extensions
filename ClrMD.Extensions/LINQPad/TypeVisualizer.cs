@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using LINQPad;
 
@@ -61,12 +62,36 @@ namespace ClrMD.Extensions.LINQPad
     {
         public class DataRowVisual : ICustomMemberProvider
         {
-            private readonly ClrObject m_row;
-            private List<ClrObject> m_columns; 
+            private readonly List<ClrObject> m_columns;
+            private readonly int m_record;
+
+            public ClrObject Row { get; private set; }
+
+            public ClrObject this[string columnName]
+            {
+                get
+                {
+                    var column = m_columns.FirstOrDefault(item => (string)item["_columnName"] == columnName);
+
+                    if (column == null)
+                        return null;
+
+                    return (ClrObject)column.Dynamic._storage.values[m_record];
+                }
+            }
+
+            public DataRowState RowState { get; private set; }
 
             public DataRowVisual(ClrObject row)
             {
-                m_row = row;
+                Row = row;
+
+                int tempRecord = (int)row["tempRecord"];
+                int newRecord = (int)row["newRecord"];
+                int oldRecord = (int)row["oldRecord"];
+
+                RowState = GetRowState(newRecord, oldRecord);
+                m_record = GetRecord(tempRecord, newRecord, oldRecord);
 
                 m_columns = (from column in (ClrObject)row.Dynamic._columns._list._items
                              where !column.IsNull()
@@ -75,30 +100,62 @@ namespace ClrMD.Extensions.LINQPad
 
             public IEnumerable<string> GetNames()
             {
-                return m_columns.Select(column => (string)column["_columnName"]);
+                yield return "RowState";
+
+                foreach (var name in m_columns.Select(column => (string)column["_columnName"]))
+                    yield return name;
             }
 
             public IEnumerable<Type> GetTypes()
             {
-                return m_columns.Select(column => typeof(object));
+                yield return typeof(DataRowState);
+
+                for (int i = 0; i < m_columns.Count; i++)
+                    yield return typeof (object);
             }
 
             public IEnumerable<object> GetValues()
             {
-                int record = (int)m_row["tempRecord"];
-
-                if (record == -1)
-                    record = (int)m_row["newRecord"];
-
-                if (record == -1)
-                    record = (int)m_row["oldRecord"];
+                yield return RowState;
 
                 foreach (ClrObject column in m_columns)
                 {
-                    var value = (ClrObject)column.Dynamic._storage.values[record];
+                    var value = (ClrObject)column.Dynamic._storage.values[m_record];
 
                     yield return value.HasSimpleValue ? value.SimpleValue : value;
                 }
+            }
+
+            private DataRowState GetRowState(int newRecord, int oldRecord)
+            {
+                if (oldRecord == newRecord)
+                {
+                    if (oldRecord == -1)
+                        return DataRowState.Detached;
+
+                    return DataRowState.Unchanged;
+                }
+
+                if (oldRecord == -1)
+                    return DataRowState.Added;
+                
+                if (newRecord == -1)
+                    return DataRowState.Deleted;
+                
+                return DataRowState.Modified;
+            }
+
+            private int GetRecord(int tempRecord, int newRecord, int oldRecord)
+            {
+                int record = tempRecord;
+
+                if (record == -1)
+                    record = newRecord;
+
+                if (record == -1)
+                    record = oldRecord;
+
+                return record;
             }
         }
 
@@ -113,6 +170,11 @@ namespace ClrMD.Extensions.LINQPad
         public class DataTableVisual : IEnumerable<DataRowVisualizer.DataRowVisual>
         {
             private readonly ClrObject m_table;
+
+            public string Name
+            {
+                get { return (string)m_table["tableName"]; }
+            }
 
             public DataTableVisual(ClrObject table)
             {
@@ -279,7 +341,12 @@ namespace ClrMD.Extensions.LINQPad
     {
         public class DataSetVisual : ICustomMemberProvider
         {
-            private List<ClrObject> m_tables; 
+            private readonly List<ClrObject> m_tables;
+
+            public IEnumerable<DataTableVisualizer.DataTableVisual> DataTables
+            {
+                get { return m_tables.Select(table => new DataTableVisualizer.DataTableVisual(table)); }
+            }
 
             public DataSetVisual(ClrObject dataset)
             {
