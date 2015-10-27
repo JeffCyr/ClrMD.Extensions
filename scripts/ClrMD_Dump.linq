@@ -59,7 +59,9 @@ public static class LocalExtensions
             {
                 Type = typeGroup.Key.Name,
                 Count = count,
-                TotalSize = (totalSize / 1024 / 1024).ToString("0.## MB"),
+                // TotalSizeMB would be easier to use because its is a double value
+				// which we can use to order to investigate on memory usage
+                TotalSizeMB = (totalSize / 1024 / 1024),
                 // Get the first 100 instances of the type.
                 First100Objects = typeGroup.Take(100),
             }
