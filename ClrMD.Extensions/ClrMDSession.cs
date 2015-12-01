@@ -204,7 +204,7 @@ namespace ClrMD.Extensions
         public ITypeDeobfuscator GetTypeDeobfuscator(string typeName)
         {
             if (m_deobfuscator == null)
-                return new DummyTypeDeobfuscator(typeName);
+                return DummyTypeDeobfuscator.GetDeobfuscator(typeName);
 
             return m_deobfuscator.GetTypeDeobfuscator(typeName);
         }
@@ -212,7 +212,7 @@ namespace ClrMD.Extensions
         public ITypeDeobfuscator GetTypeDeobfuscator(ClrType type)
         {
             if (m_deobfuscator == null)
-                return new DummyTypeDeobfuscator(type.Name);
+                return DummyTypeDeobfuscator.GetDeobfuscator(type.Name);
 
             return m_deobfuscator.GetTypeDeobfuscator(type);
         }

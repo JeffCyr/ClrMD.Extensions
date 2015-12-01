@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Xml.Linq;
 using Microsoft.Diagnostics.Runtime;
@@ -31,10 +32,24 @@ namespace ClrMD.Extensions.Obfuscation
 
     internal class DummyTypeDeobfuscator : ITypeDeobfuscator
     {
+        private static readonly Dictionary<string, ITypeDeobfuscator> s_cache = new Dictionary<string, ITypeDeobfuscator>();
+
+        public static ITypeDeobfuscator GetDeobfuscator(string typeName)
+        {
+            ITypeDeobfuscator value;
+            if (!s_cache.TryGetValue(typeName, out value))
+            {
+                value = new DummyTypeDeobfuscator(typeName);
+                s_cache.Add(typeName, value);
+            }
+
+            return value;
+        }
+
         public string ObfuscatedName { get; set; }
         public string OriginalName { get; set; }
 
-        public DummyTypeDeobfuscator(string typeName)
+        private DummyTypeDeobfuscator(string typeName)
         {
             ObfuscatedName = typeName;
             OriginalName = typeName;
@@ -157,7 +172,7 @@ namespace ClrMD.Extensions.Obfuscation
         {
             return (from item in m_typeMap
                     where item.Key.Item2 == typeName
-                    select item.Value).FirstOrDefault() ?? (ITypeDeobfuscator)new DummyTypeDeobfuscator(typeName);
+                    select item.Value).FirstOrDefault() ?? DummyTypeDeobfuscator.GetDeobfuscator(typeName);
         }
 
         public ITypeDeobfuscator GetTypeDeobfuscator(ClrType type)
@@ -172,7 +187,7 @@ namespace ClrMD.Extensions.Obfuscation
                     return result;
             }
 
-            return new DummyTypeDeobfuscator(type.Name);
+            return DummyTypeDeobfuscator.GetDeobfuscator(type.Name);
         }
 
         private string GetDotFuscatorTypeName(ClrType type)

@@ -127,7 +127,7 @@ namespace ClrMD.Extensions
             IsInterior = isInterior;
 
             if (ClrMDSession.Current == null)
-                m_deobfuscator = new DummyTypeDeobfuscator(type.Name);
+                m_deobfuscator = DummyTypeDeobfuscator.GetDeobfuscator(type.Name);
             else
                 m_deobfuscator = ClrMDSession.Current.GetTypeDeobfuscator(type);
 
