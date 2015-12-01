@@ -601,6 +601,9 @@ namespace ClrMD.Extensions
 
             public static object GetSimpleValue(ClrObject obj)
             {
+                if (obj.IsNull())
+                    throw new NullReferenceException("ClrObject at is pointing to null address.");
+
                 ClrType type = obj.Type;
                 ClrHeap heap = type.Heap;
 
