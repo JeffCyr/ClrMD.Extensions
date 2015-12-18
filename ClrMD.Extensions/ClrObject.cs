@@ -840,11 +840,11 @@ namespace ClrMD.Extensions
 
         public IEnumerable<object> GetValues()
         {
-            if (HasSimpleValue)
+            if (!IsNull() && HasSimpleValue)
             {
                 yield return SimpleValue;
             }
-            else if (Type.IsArray)
+            else if (!IsNull() && Type.IsArray)
             {
                 yield return m_deobfuscator.OriginalName;
                 yield return GetAddressString();
@@ -865,7 +865,7 @@ namespace ClrMD.Extensions
                     foreach (ClrInstanceField field in Type.Fields)
                     {
                         if (LinqPadExtensions.SmartNavigation)
-                            yield return this[field].HasSimpleValue ? this[field].SimpleValue : this[field];
+                            yield return (!this[field].IsNull() && this[field].HasSimpleValue) ? this[field].SimpleValue : this[field];
                         else
                             yield return this[field].ToString();
                     }
