@@ -111,6 +111,11 @@ namespace ClrMD.Extensions
                    select new ClrObject(address, type);
         }
 
+        public static ClrObject DowncastToBase(this ClrObject clrObject)
+        {
+            return clrObject?.Type?.BaseType != null ? new ClrObject(clrObject.Address, clrObject.Type.BaseType) : null;
+        }
+
         public class StackFrameInfo
         {
             public string Function;
