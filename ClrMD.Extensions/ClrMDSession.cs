@@ -166,15 +166,13 @@ namespace ClrMD.Extensions
         {
             if (typeName.Contains("*"))
             {
-                string typeNameRegex = "^" + Regex.Escape(typeName).Replace("\\*", ".*") + "$";
-                Regex regex = new Regex(typeNameRegex, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+                var regex = new Regex($"^{Regex.Escape(typeName).Replace("\\*", ".*")}$",
+                    RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-                return AllObjects.Where(item => regex.IsMatch(item.Type.Name));
+                return AllObjects.Where(item => regex.IsMatch(item.TypeName));
             }
 
-            typeName = ObfuscateType(typeName);
-
-            return AllObjects.Where(item => item.Type.Name == typeName);
+            return AllObjects.Where(item => item.TypeName == typeName);
         }
 
         public void CreateReferenceMapping()
