@@ -45,8 +45,11 @@ namespace ClrMD.Extensions
             {
                 ClrInstanceField field = GetField(fieldName);
 
+                //if (field == null)
+                //    throw new ArgumentException(string.Format("Field '{0}' not found in Type '{1}'", fieldName, Type.Name));
+
                 if (field == null)
-                    throw new ArgumentException(string.Format("Field '{0}' not found in Type '{1}'", fieldName, Type.Name));
+                    return new ClrObject(0, new UndefinedType(Heap));
 
                 return this[field];
             }
@@ -137,6 +140,11 @@ namespace ClrMD.Extensions
         public bool IsNull()
         {
             return Address == NullAddress || Type is UnknownType;
+        }
+
+        public bool IsUndefined()
+        {
+            return Type is UndefinedType;
         }
 
         public ClrInstanceField GetField(string fieldName)
@@ -497,6 +505,12 @@ namespace ClrMD.Extensions
 
         private void ToString(StringBuilder builder)
         {
+            if (IsUndefined())
+            {
+                builder.Append("#undefined");
+                return;
+            }
+
             if (HasSimpleValue)
             {
                 builder.Append(SimpleValueHelper.GetSimpleValueString(this));
@@ -757,26 +771,26 @@ namespace ClrMD.Extensions
 
         public IEnumerable<string> GetNames()
         {
-            if (HasSimpleValue)
+            if (HasSimpleValue || IsUndefined())
             {
                 yield return "";
             }
             else if (Type.IsArray)
             {
-                yield return "Type";
-                yield return "Address";
-                yield return "Length";
-                yield return "Items";
+                yield return "[Type]";
+                yield return "[Address]";
+                yield return "[Length]";
+                yield return "[Items]";
             }
             else
             {
-                yield return "Type";
-                yield return "Address";
+                yield return "[Type]";
+                yield return "[Address]";
 
                 if (!IsNull())
                 {
                     if (m_visualizer != null)
-                        yield return "Visualizer";
+                        yield return "[Visualizer]";
 
                     foreach (var field in Fields)
                         yield return GetFieldName(field.Name);
@@ -794,6 +808,10 @@ namespace ClrMD.Extensions
             if (HasSimpleValue)
             {
                 yield return GetSimpleValueType();
+            }
+            else if (IsUndefined())
+            {
+                yield return typeof(string);
             }
             else if (Type.IsArray)
             {
@@ -840,7 +858,11 @@ namespace ClrMD.Extensions
 
         public IEnumerable<object> GetValues()
         {
-            if (!IsNull() && HasSimpleValue)
+            if (IsUndefined())
+            {
+                yield return ToString();
+            }
+            else if (!IsNull() && HasSimpleValue)
             {
                 yield return SimpleValue;
             }

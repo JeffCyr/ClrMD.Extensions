@@ -5,7 +5,31 @@ using Microsoft.Diagnostics.Runtime;
 namespace ClrMD.Extensions.Core
 {
     // Null object pattern to prevent NullReferenceException when ClrHeap returns a null type.
-    public sealed class UnknownType : ClrType
+    public class UnknownType : InvalidType
+    {
+        public override string Name
+        {
+            get { return "Unknown Type"; }
+        }
+
+        internal UnknownType(ClrHeap heap)
+            : base(heap)
+        { }
+    }
+
+    public class UndefinedType : InvalidType
+    {
+        public override string Name
+        {
+            get { return "Undefined Type"; }
+        }
+
+        internal UndefinedType(ClrHeap heap)
+            : base(heap)
+        { }
+    }
+
+    public abstract class InvalidType : ClrType
     {
         private ClrHeap m_heap;
 
@@ -17,11 +41,6 @@ namespace ClrMD.Extensions.Core
         public override uint MetadataToken
         {
             get { throw new NotSupportedException(); }
-        }
-
-        public override string Name
-        {
-            get { return "Unknown Type"; }
         }
 
         public override ClrHeap Heap
@@ -109,7 +128,7 @@ namespace ClrMD.Extensions.Core
             get { return new ClrThreadStaticField[0]; }
         }
 
-        internal UnknownType(ClrHeap heap)
+        internal InvalidType(ClrHeap heap)
         {
             m_heap = heap;
         }

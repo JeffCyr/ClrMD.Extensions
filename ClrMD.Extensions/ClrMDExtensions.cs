@@ -164,6 +164,31 @@ namespace ClrMD.Extensions
         {
             return new ClrObjectWrapper(item);
         }
+
+        public static ClrType GetDeclaringType(this ClrField field, ClrType containingType)
+        {
+            if (field.Offset == -1)
+                return containingType;
+
+            List<ClrType> types = new List<ClrType>();
+            ClrType t = containingType;
+
+            while (t != null)
+            {
+                types.Add(t);
+                t = t.BaseType;
+            }
+
+            types.Reverse();
+
+            foreach (var type in types)
+            {
+                if (type.Fields.Any(item => item.Offset == field.Offset))
+                    return type;
+            }
+
+            return containingType;
+        }
     }
 
     public class ClrObjectWrapper
