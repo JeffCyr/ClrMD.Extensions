@@ -108,6 +108,16 @@ namespace ClrMD.Extensions
             get { return SimpleValueHelper.GetSimpleValue(this); }
         }
 
+        public object SimpleDisplayValue
+        {
+            get
+            {
+                if (Type.IsEnum)
+                    return Type.GetEnumName(SimpleValue) ?? SimpleValue.ToString();
+                return SimpleValue;
+            }
+        }
+
         public ulong Size
         {
             get { return Type.GetSize(Address); }
@@ -807,7 +817,7 @@ namespace ClrMD.Extensions
         {
             if (HasSimpleValue)
             {
-                yield return GetSimpleValueType();
+                 yield return GetSimpleValueType();
             }
             else if (IsUndefined())
             {
@@ -864,7 +874,7 @@ namespace ClrMD.Extensions
             }
             else if (!IsNull() && HasSimpleValue)
             {
-                yield return SimpleValue;
+                yield return SimpleDisplayValue;
             }
             else if (!IsNull() && Type.IsArray)
             {
@@ -887,7 +897,7 @@ namespace ClrMD.Extensions
                     foreach (ClrInstanceField field in Type.Fields)
                     {
                         if (LinqPadExtensions.SmartNavigation)
-                            yield return (!this[field].IsNull() && this[field].HasSimpleValue) ? this[field].SimpleValue : this[field];
+                            yield return (!this[field].IsNull() && this[field].HasSimpleValue) ? this[field].SimpleDisplayValue : this[field];
                         else
                             yield return this[field].ToString();
                     }
@@ -908,7 +918,11 @@ namespace ClrMD.Extensions
 
         private Type GetSimpleValueType()
         {
-            return SimpleValue == null ? typeof(object) : SimpleValue.GetType();
+            if (SimpleValue == null)
+                return typeof (object);
+            if (Type.IsEnum)
+                return typeof (string);
+            return SimpleValue.GetType();
         }
 
         #endregion
