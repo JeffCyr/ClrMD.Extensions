@@ -21,7 +21,7 @@ namespace ClrMD.Extensions
         private static readonly Regex s_fieldNameRegex = new Regex("^<([^>]+)>k__BackingField$", RegexOptions.Compiled);
 
         private readonly ITypeDeobfuscator m_deobfuscator;
-        private readonly TypeVisualizer m_visualizer;
+        private readonly Lazy<TypeVisualizer> m_lazyVisualizer;
 
         public ulong Address { get; private set; }
 
@@ -130,7 +130,7 @@ namespace ClrMD.Extensions
 
         public object Visualizer
         {
-            get { return m_visualizer.GetValue(this); }
+            get { return m_lazyVisualizer.Value?.GetValue(this); }
         }
 
         public ClrObject(ulong address, ClrType type, bool isInterior = false)
@@ -144,7 +144,7 @@ namespace ClrMD.Extensions
             else
                 m_deobfuscator = ClrMDSession.Current.GetTypeDeobfuscator(type);
 
-            m_visualizer = TypeVisualizer.TryGetVisualizer(this);
+            m_lazyVisualizer = new Lazy<TypeVisualizer>(() => TypeVisualizer.TryGetVisualizer(this));
         }
 
         public bool IsNull()
@@ -799,7 +799,7 @@ namespace ClrMD.Extensions
 
                 if (!IsNull())
                 {
-                    if (m_visualizer != null)
+                    if (Visualizer != null)
                         yield return "[Visualizer]";
 
                     foreach (var field in Fields)
@@ -847,7 +847,7 @@ namespace ClrMD.Extensions
 
                 if (!IsNull())
                 {
-                    if (m_visualizer != null)
+                    if (Visualizer != null)
                         yield return typeof(object);
 
                     for (int i = 0; i < Type.Fields.Count; ++i)
@@ -891,8 +891,9 @@ namespace ClrMD.Extensions
 
                 if (!IsNull())
                 {
-                    if (m_visualizer != null)
-                        yield return m_visualizer.GetValue(this);
+                    var visual = Visualizer;
+                    if (visual != null)
+                        yield return visual;
 
                     foreach (ClrInstanceField field in Type.Fields)
                     {
