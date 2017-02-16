@@ -12,12 +12,12 @@ namespace ClrMD.Extensions.LINQPad
     {
         private static Dictionary<string, TypeVisualizer> m_visualizers;
 
-        private static List<KeyValuePair<string, TypeVisualizer>> m_regexVisualizers;
+        private static List<KeyValuePair<Regex, TypeVisualizer>> m_regexVisualizers;
 
         static TypeVisualizer()
         {
             m_visualizers = new Dictionary<string, TypeVisualizer>();
-            m_regexVisualizers = new List<KeyValuePair<string, TypeVisualizer>>();
+            m_regexVisualizers = new List<KeyValuePair<Regex, TypeVisualizer>>();
 
             RegisterVisualizer("System.Collections.Generic.Dictionary", new DictionaryVisualizer());
             RegisterVisualizer("System.Collections.Generic.List", new ListVisualizer());
@@ -35,7 +35,7 @@ namespace ClrMD.Extensions.LINQPad
 
         public static void RegisterRegexVisualizer(string typeName, TypeVisualizer visualizer)
         {
-            m_regexVisualizers.Add(new KeyValuePair<string, TypeVisualizer>(typeName, visualizer));
+            m_regexVisualizers.Add(new KeyValuePair<Regex, TypeVisualizer>(new Regex(typeName, RegexOptions.Compiled), visualizer));
         }
 
 
@@ -57,7 +57,7 @@ namespace ClrMD.Extensions.LINQPad
 
             foreach (var keyValuePair in m_regexVisualizers)
             {
-                if (Regex.IsMatch(name, keyValuePair.Key))
+                if (keyValuePair.Key.IsMatch(name))
                 {
                     return keyValuePair.Value;
                 }
