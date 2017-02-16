@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text.RegularExpressions;
 using LINQPad;
 
 namespace ClrMD.Extensions.LINQPad
@@ -11,14 +12,20 @@ namespace ClrMD.Extensions.LINQPad
     {
         private static Dictionary<string, TypeVisualizer> m_visualizers;
 
+        private static List<KeyValuePair<Regex, TypeVisualizer>> m_regexVisualizers;
+
         static TypeVisualizer()
         {
             m_visualizers = new Dictionary<string, TypeVisualizer>();
+            m_regexVisualizers = new List<KeyValuePair<Regex, TypeVisualizer>>();
 
             RegisterVisualizer("System.Collections.Generic.Dictionary", new DictionaryVisualizer());
+            RegisterVisualizer("System.Collections.Generic.List", new ListVisualizer());
             RegisterVisualizer("System.Data.DataRow", new DataRowVisualizer());
             RegisterVisualizer("System.Data.DataTable", new DataTableVisualizer());
             RegisterVisualizer("System.Data.DataSet", new DataSetVisualizer());
+           
+
         }
 
         public static void RegisterVisualizer(string typeName, TypeVisualizer visualizer)
@@ -26,16 +33,61 @@ namespace ClrMD.Extensions.LINQPad
             m_visualizers[typeName] = visualizer;
         }
 
+        public static void RegisterRegexVisualizer(string typeName, TypeVisualizer visualizer)
+        {
+            m_regexVisualizers.Add(new KeyValuePair<Regex, TypeVisualizer>(new Regex(typeName, RegexOptions.Compiled), visualizer));
+        }
+
+
         public static TypeVisualizer TryGetVisualizer(ClrObject o)
         {
             TypeVisualizer visualizer;
-            if (m_visualizers.TryGetValue(o.TypeName, out visualizer))
+
+            //strip to non generic portion.
+            string name = o.TypeName;
+            int index = name.IndexOf("<");
+            if (index != -1)
+            {
+                name = name.Substring(0, index);
+            }
+
+            if (m_visualizers.TryGetValue(name, out visualizer))
                 return visualizer;
+
+
+            foreach (var keyValuePair in m_regexVisualizers)
+            {
+                if (keyValuePair.Key.IsMatch(name))
+                {
+                    return keyValuePair.Value;
+                }
+            }
+
 
             return null;
         }
 
         public abstract object GetValue(ClrObject o);
+    }
+
+
+    public class ListVisualizer : TypeVisualizer
+    {
+        public class ListVisual
+        {
+            public int Count { get; set; }
+
+            public IEnumerable<ClrObject> Items { get; set; }
+        }
+
+        public override object GetValue(ClrObject o)
+        {
+            return new ListVisual()
+            {
+                Count = o.Dynamic._size,
+                Items = o.Dynamic._items.Take(o.Dynamic._size),
+            };
+        }
     }
 
     public class DictionaryVisualizer : TypeVisualizer
