@@ -243,6 +243,28 @@ namespace ClrMD.Extensions
             return references;
         }
 
+        public IEnumerable<ClrObject> EnumerateDictionaryValues()
+        {
+            if (!TypeName.StartsWith("System.Collections.Generic.Dictionary<"))
+                yield break;
+
+            // https://referencesource.microsoft.com/#mscorlib/system/collections/generic/dictionary.cs,d864a2277aad4ece
+            var entries = this["entries"];
+            var count = (int)this["count"];
+            int index = 0;
+
+            // Use unsigned comparison since we set index to dictionary.count+1 when the enumeration ends.
+            // dictionary.count+1 could be negative if dictionary.count is Int32.MaxValue
+            while ((uint)index < (uint)count)
+            {
+                if ((int)entries[index]["hashCode"] >= 0)
+                {
+                    yield return entries[index]["value"];
+                    index++;
+                }
+            }
+        }
+
         private ClrObject GetInnerObject(ulong pointer, ClrType type)
         {
             ulong fieldAddress;
