@@ -21,10 +21,11 @@ namespace ClrMD.Extensions.LINQPad
 
             RegisterVisualizer("System.Collections.Generic.Dictionary", new DictionaryVisualizer());
             RegisterVisualizer("System.Collections.Generic.List", new ListVisualizer());
+            RegisterVisualizer("System.Collections.Generic.Queue", new QueueVisualizer());
             RegisterVisualizer("System.Data.DataRow", new DataRowVisualizer());
             RegisterVisualizer("System.Data.DataTable", new DataTableVisualizer());
             RegisterVisualizer("System.Data.DataSet", new DataSetVisualizer());
-           
+
 
         }
 
@@ -70,6 +71,41 @@ namespace ClrMD.Extensions.LINQPad
         public abstract object GetValue(ClrObject o);
     }
 
+    public class QueueVisualizer : TypeVisualizer
+    {
+        public class QueueVisual
+        {
+            public int Count { get; set; }
+
+            public IEnumerable<ClrObject> Items { get; set; }
+        }
+
+
+        public override object GetValue(ClrObject o)
+        {
+            int size = (int)o.Dynamic._size;
+            int head = (int)o.Dynamic._head;
+            int tail = (int)o.Dynamic._tail;
+            var items = o.Dynamic._array as IEnumerable<ClrObject>;
+
+            if (tail >= head)
+            {
+                return new QueueVisual()
+                {
+                    Count = size,
+                    Items = items.Skip(head).Take(size),
+                };
+            }
+
+            //wrap around!
+            return new QueueVisual()
+            {
+                Count = size,
+                Items = items.Skip(head).Concat(items.Take(tail))
+            };
+
+        }
+    }
 
     public class ListVisualizer : TypeVisualizer
     {
@@ -82,10 +118,12 @@ namespace ClrMD.Extensions.LINQPad
 
         public override object GetValue(ClrObject o)
         {
+            int size = (int) o.Dynamic._size;
+            var col = o.Dynamic._items as IEnumerable<ClrObject>;
             return new ListVisual()
             {
-                Count = o.Dynamic._size,
-                Items = o.Dynamic._items.Take(o.Dynamic._size),
+                Count = size,
+                Items = col?.Take(size),
             };
         }
     }
@@ -97,7 +135,7 @@ namespace ClrMD.Extensions.LINQPad
             public int Count { get; set; }
             public IEnumerable<KeyValuePair<ClrObject, ClrObject>> Items { get; set; }
         }
-        
+
         public override object GetValue(ClrObject o)
         {
             return new DictionaryVisual
@@ -163,7 +201,7 @@ namespace ClrMD.Extensions.LINQPad
                 yield return typeof(DataRowState);
 
                 for (int i = 0; i < m_columns.Count; i++)
-                    yield return typeof (object);
+                    yield return typeof(object);
             }
 
             public IEnumerable<object> GetValues()
@@ -190,10 +228,10 @@ namespace ClrMD.Extensions.LINQPad
 
                 if (oldRecord == -1)
                     return DataRowState.Added;
-                
+
                 if (newRecord == -1)
                     return DataRowState.Deleted;
-                
+
                 return DataRowState.Modified;
             }
 
@@ -261,7 +299,7 @@ namespace ClrMD.Extensions.LINQPad
             {
                 get { return m_tree; }
             }
- 
+
             internal RBTreeEnumerator(ClrObject tree)
             {
                 m_tree = tree;
@@ -272,7 +310,7 @@ namespace ClrMD.Extensions.LINQPad
 
             public void Dispose()
             {
-                
+
             }
 
             public bool MoveNext()

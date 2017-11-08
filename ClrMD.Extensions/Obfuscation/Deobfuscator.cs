@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -13,11 +14,19 @@ namespace ClrMD.Extensions.Obfuscation
     {
         public readonly string ObfuscatedName;
         public readonly string OriginalName;
+        public readonly string OriginalFieldType;
 
-        public ObfuscatedField(string obfuscatedName, string originalName)
+
+        public override string ToString()
+        {
+            return $"{ObfuscatedName} <==>  {OriginalName}   ({OriginalFieldType})";
+        }
+
+        public ObfuscatedField(string obfuscatedName, string originalName, string originalFieldType)
         {
             ObfuscatedName = obfuscatedName;
             OriginalName = originalName;
+            OriginalFieldType = originalFieldType;
         }
     }
 
@@ -26,8 +35,9 @@ namespace ClrMD.Extensions.Obfuscation
         string ObfuscatedName { get; }
         string OriginalName { get; }
 
-        bool TryDeobfuscateField(string obfuscatedFieldName, out string originalFieldName);
-        bool TryObfuscateField(string originalFieldName, out string obfuscatedFieldName);
+        bool TryDeobfuscateField(string obfuscatedFieldName, string typeName, out string originalFieldName);
+        bool TryObfuscateField(string originalFieldName, out ObfuscatedField field);
+
     }
 
     internal class DummyTypeDeobfuscator : ITypeDeobfuscator
@@ -55,15 +65,15 @@ namespace ClrMD.Extensions.Obfuscation
             OriginalName = typeName;
         }
 
-        public bool TryDeobfuscateField(string obfuscatedFieldName, out string originalFieldName)
+        public bool TryDeobfuscateField(string obfuscatedFieldName, string typeName, out string originalFieldName)
         {
             originalFieldName = null;
             return false;
         }
 
-        public bool TryObfuscateField(string originalFieldName, out string obfuscatedFieldName)
+        public bool TryObfuscateField(string originalFieldName, out ObfuscatedField obfuscatedFieldName)
         {
-            obfuscatedFieldName = null;
+            obfuscatedFieldName = default(ObfuscatedField);
             return false;
         }
     }
@@ -84,18 +94,19 @@ namespace ClrMD.Extensions.Obfuscation
         internal TypeDeobfuscator(XElement typeNode)
         {
             m_comparer = StringComparer.Ordinal;
-            ObfuscatedName = ((string)typeNode.Element("newname")).Replace('/', '+');
-            OriginalName = ((string)typeNode.Element("name")).Replace('/', '+');
+            ObfuscatedName = ((string) typeNode.Element("newname")).Replace('/', '+');
+            OriginalName = ((string) typeNode.Element("name")).Replace('/', '+');
 
             m_fields = (from fieldNode in typeNode.Elements("fieldlist").Elements("field")
-                        let originalName = (string)fieldNode.Element("name")
-                        let obfuscatedName = (string)fieldNode.Element("newname")
-                        select new ObfuscatedField(obfuscatedName, originalName)).ToArray();
+                let originalName = (string) fieldNode.Element("name")
+                let obfuscatedName = (string) fieldNode.Element("newname")
+                let fieldType = TypeNameRegex.CorrectTypeNames(TypeNameRegex.RemoveArityIndicators((string) fieldNode.Element("signature"))).Split(' ')[0]
+                select new ObfuscatedField(obfuscatedName, originalName, fieldType)).ToArray();
 
-            Array.Sort(m_fields, (left, right) => m_comparer.Compare(left.ObfuscatedName, right.ObfuscatedName));
+            Array.Sort(m_fields, (left, right) => m_comparer.Compare(left.ObfuscatedName + left.OriginalFieldType, right.ObfuscatedName + right.OriginalFieldType));
         }
 
-        public bool TryDeobfuscateField(string obfuscatedFieldName, out string originalFieldName)
+        public bool TryDeobfuscateField(string obfuscatedFieldName, string originalFieldType, out string originalFieldName)
         {
             int lo = 0;
             int hi = m_fields.Length - 1;
@@ -104,7 +115,7 @@ namespace ClrMD.Extensions.Obfuscation
                 int i = lo + ((hi - lo) >> 1);
                 ObfuscatedField field = m_fields[i];
 
-                int order = m_comparer.Compare(field.ObfuscatedName, obfuscatedFieldName);
+                int order = m_comparer.Compare(field.ObfuscatedName + field.OriginalFieldType, obfuscatedFieldName + originalFieldType);
 
                 if (order == 0)
                 {
@@ -126,20 +137,20 @@ namespace ClrMD.Extensions.Obfuscation
             return false;
         }
 
-        public bool TryObfuscateField(string originalFieldName, out string obfuscatedFieldName)
+        public bool TryObfuscateField(string originalFieldName, out ObfuscatedField obfuscatedFieldName)
         {
             for (int i = 0; i < m_fields.Length; i++)
             {
-                var field = m_fields[i];
+                ObfuscatedField field = m_fields[i];
 
                 if (m_comparer.Compare(field.OriginalName, originalFieldName) == 0)
                 {
-                    obfuscatedFieldName = field.ObfuscatedName;
+                    obfuscatedFieldName = field;
                     return true;
                 }
             }
 
-            obfuscatedFieldName = null;
+            obfuscatedFieldName = default(ObfuscatedField);
             return false;
         }
     }
@@ -158,21 +169,21 @@ namespace ClrMD.Extensions.Obfuscation
             var doc = XDocument.Load(renamingMapFilePath);
 
             m_typeMap = (from moduleNode in doc.Elements("dotfuscatorMap").Elements("mapping").Elements("module")
-                         from typeNode in moduleNode.Elements("type")
-                         let obfuscatedTypeName = (string)typeNode.Element("newname")
-                         where obfuscatedTypeName != null
-                         select new
-                                {
-                                    TypeKey = Tuple.Create((string)moduleNode.Element("name"), obfuscatedTypeName),
-                                    TypeNode = typeNode
-                                }).ToDictionary(item => item.TypeKey, item => new TypeDeobfuscator(item.TypeNode));
+                from typeNode in moduleNode.Elements("type")
+                let obfuscatedTypeName = (string) typeNode.Element("newname")
+                where obfuscatedTypeName != null
+                select new
+                {
+                    TypeKey = Tuple.Create((string) moduleNode.Element("name"), obfuscatedTypeName),
+                    TypeNode = typeNode
+                }).ToDictionary(item => item.TypeKey, item => new TypeDeobfuscator(item.TypeNode));
         }
 
         public ITypeDeobfuscator GetTypeDeobfuscator(string typeName)
         {
             return (from item in m_typeMap
-                    where item.Key.Item2 == typeName
-                    select item.Value).FirstOrDefault() ?? DummyTypeDeobfuscator.GetDeobfuscator(typeName);
+                       where item.Key.Item2 == typeName
+                       select item.Value).FirstOrDefault() ?? DummyTypeDeobfuscator.GetDeobfuscator(typeName);
         }
 
         public ITypeDeobfuscator GetTypeDeobfuscator(ClrType type)
@@ -195,18 +206,60 @@ namespace ClrMD.Extensions.Obfuscation
             return type.Name.Replace('+', '/');
         }
 
-        public string ObfuscateType(string deobfuscatedTypeName)
+
+
+        public string ObfuscateSimpleType(string deobfuscatedTypeName)
         {
             return (from deobfuscator in m_typeMap.Values
-                    where deobfuscator.OriginalName.Equals(deobfuscatedTypeName, StringComparison.OrdinalIgnoreCase)
-                    select deobfuscator.ObfuscatedName).FirstOrDefault() ?? deobfuscatedTypeName;
+                       where deobfuscator.OriginalName.Equals(deobfuscatedTypeName, StringComparison.OrdinalIgnoreCase)
+                       select deobfuscator.ObfuscatedName).FirstOrDefault() ?? deobfuscatedTypeName;
         }
+
+        public string ObfuscateType(string deobfuscatedTypeName)
+        {
+            string type;
+            string[] split;
+            if (TypeNameRegex.TryExtractGenericArgs(deobfuscatedTypeName, out type, out split))
+            {
+                for (int i = 0; i < split.Length; i++)
+                {
+                    split[i] = ObfuscateType(split[i]);
+                }
+                return $"{TypeNameRegex.RemoveArityIndicators(ObfuscateSimpleType(type))}<{string.Join(",", split)}>";
+            }
+            else
+            {
+                return ObfuscateSimpleType(deobfuscatedTypeName);
+            }
+        }
+
+        public string DeobfuscateSimpleType(string obfuscatedTypeName)
+        {
+            string result = (from deobfuscator in m_typeMap.Values
+                                where deobfuscator.ObfuscatedName.Equals(obfuscatedTypeName, StringComparison.OrdinalIgnoreCase)
+                                select deobfuscator.OriginalName).FirstOrDefault() ?? obfuscatedTypeName;
+
+            return result;
+        }
+
+
 
         public string DeobfuscateType(string obfuscatedTypeName)
         {
-            return (from deobfuscator in m_typeMap.Values
-                    where deobfuscator.ObfuscatedName.Equals(obfuscatedTypeName, StringComparison.OrdinalIgnoreCase)
-                    select deobfuscator.OriginalName).FirstOrDefault() ?? obfuscatedTypeName;
+            string type;
+            string[] split;
+            if (TypeNameRegex.TryExtractGenericArgs(obfuscatedTypeName, out type, out split))
+            {
+                for (int i = 0; i < split.Length; i++)
+                {
+                    split[i] = DeobfuscateType(split[i]);
+                }
+                return $"{TypeNameRegex.RemoveArityIndicators(DeobfuscateSimpleType(type))}<{string.Join(",", split)}>";
+            }
+            else
+            {
+                return DeobfuscateSimpleType(obfuscatedTypeName);
+            }
         }
     }
 }

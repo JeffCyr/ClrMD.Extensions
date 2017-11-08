@@ -55,6 +55,7 @@
     <Compile Include="LINQPad\LinqPadExtensions.cs" />
     <Compile Include="Obfuscation\Deobfuscator.cs" />
     <Compile Include="Obfuscation\MethodSignatureParser.cs" />
+    <Compile Include="Obfuscation\TypeNameRegex.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Core\ReferenceMap.cs" />
     <Compile Include="Core\UnknownType.cs" />

@@ -182,3 +182,4 @@ UpgradeLog*.htm
 
 # Microsoft Fakes
 FakesAssemblies/
+/.vs/ClrMD.Extensions/v15/Server/sqlite3
