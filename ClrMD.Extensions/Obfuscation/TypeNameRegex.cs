@@ -20,9 +20,43 @@ namespace ClrMD.Extensions.Obfuscation
             Tuple.Create(new Regex(@"bool", RegexOptions.Compiled), "System.Boolean"),
             Tuple.Create(new Regex(@"unsigned int8", RegexOptions.Compiled), "System.Byte"),
             Tuple.Create(new Regex(@"int8", RegexOptions.Compiled), "System.SByte"),
+            Tuple.Create(new Regex(@"/", RegexOptions.Compiled), "+"),
         };
 
-        private static readonly Regex s_genericTypeArgsRegex = new Regex(@"\w[\w\.\d]*<(?<args>.*)>", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        private static readonly Regex s_missingSystemPrefix = new Regex(@"Int(\d{2})", RegexOptions.Compiled);
+
+
+        private static readonly Regex s_genericTypeArgsRegex = new Regex(@"\w[\w\.\d\+]*<(?<args>.*)>", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex s_callstackLineRegex = new Regex(@"\w[\w\.\d\+<>`]*\((?<args>.*)\)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        private static readonly Regex s_nestedTypeShort = new Regex(@"^[A-Z]{1,3}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        public static string FixMethodArgumentType(string type)
+        {
+            return s_missingSystemPrefix.Replace(type, "System.Int$1");
+        }
+
+        public static bool CouldBeNestedType(string input)
+        {
+            return s_nestedTypeShort.IsMatch(input);
+        }
+
+        public static bool TryExtractMethodInfo(string input, out string prefix, out string[] argTypes)
+        {
+            var m = s_callstackLineRegex.Match(input);
+            if (m.Success)
+            {
+                string args = m.Groups["args"].Value;
+                prefix = input.Substring(0, m.Groups["args"].Index - 1);
+                argTypes = args.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                return true;
+            }
+
+            prefix = null;
+            argTypes = new string[0];
+            return false;
+        }
+
 
         public static bool TryExtractGenericArgs(string input, out string baseType, out string[] genericArgs)
         {
@@ -34,9 +68,6 @@ namespace ClrMD.Extensions.Obfuscation
                 genericArgs = args.Split(new[] {',', ' '}, StringSplitOptions.RemoveEmptyEntries);
                 return true;
             }
-
-
-
 
             baseType = null;
             genericArgs = null;
