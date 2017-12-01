@@ -30,12 +30,38 @@ namespace ClrMD.Extensions.Obfuscation
         }
     }
 
+    public struct ObfuscatedMethod
+    {
+        public readonly string ObfuscatedName;
+        public readonly string OriginalName;
+        public readonly string ReturnType;
+        public readonly string[] ArgumentTypes;
+
+        internal string SortKey => $"{ObfuscatedName}({string.Join(",", ArgumentTypes)})";
+
+        public override string ToString()
+        {
+            return $"{ObfuscatedName} <==> {OriginalName}     ({string.Join(",", ArgumentTypes)}) : {ReturnType ?? "void"}";
+        }
+
+        public ObfuscatedMethod(string obfuscatedName, string originalName, string returnType, string[] argumentTypes)
+        {
+            ObfuscatedName = obfuscatedName;
+            OriginalName = originalName;
+            ReturnType = returnType;
+            ArgumentTypes = argumentTypes;
+        }
+    }
+
     public interface ITypeDeobfuscator
     {
         string ObfuscatedName { get; }
         string OriginalName { get; }
 
         bool TryDeobfuscateField(string obfuscatedFieldName, string typeName, out string originalFieldName);
+
+        bool TryDeobfuscateMethod(string obfuscatedMethodName, string[] parameterTypes, out string originalMethodName);
+
         bool TryObfuscateField(string originalFieldName, out ObfuscatedField field);
 
     }
@@ -71,6 +97,12 @@ namespace ClrMD.Extensions.Obfuscation
             return false;
         }
 
+        public bool TryDeobfuscateMethod(string obfuscatedMethodName, string[] parameterTypes, out string originalMethodName)
+        {
+            originalMethodName = null;
+            return false;
+        }
+
         public bool TryObfuscateField(string originalFieldName, out ObfuscatedField obfuscatedFieldName)
         {
             obfuscatedFieldName = default(ObfuscatedField);
@@ -81,6 +113,7 @@ namespace ClrMD.Extensions.Obfuscation
     public class TypeDeobfuscator : ITypeDeobfuscator
     {
         private ObfuscatedField[] m_fields;
+        private ObfuscatedMethod[] m_methods;
         private StringComparer m_comparer;
 
         public string ObfuscatedName { get; private set; }
@@ -103,7 +136,60 @@ namespace ClrMD.Extensions.Obfuscation
                 let fieldType = TypeNameRegex.CorrectTypeNames(TypeNameRegex.RemoveArityIndicators((string) fieldNode.Element("signature"))).Split(' ')[0]
                 select new ObfuscatedField(obfuscatedName, originalName, fieldType)).ToArray();
 
+            m_methods = typeNode.Elements("methodlist").Elements("method").Select(m =>
+            {
+                string originalName = (string) m.Element("name");
+                String obfuscatedName = (string) m.Element("newname");
+                string returnType;
+                string[] args;
+                if (TypeNameRegex.TryExtractMethodInfo((string) m.Element("signature"), out returnType, out args))
+                {
+                    returnType = TypeNameRegex.CorrectTypeNames(TypeNameRegex.RemoveArityIndicators(returnType));
+                    for (int i = 0; i < args.Length; i++)
+                    {
+                        args[i] = TypeNameRegex.CorrectTypeNames(TypeNameRegex.RemoveArityIndicators(args[i]));
+                    }
+                }
+                return new ObfuscatedMethod(obfuscatedName, originalName, returnType, args);
+            }).ToArray();
+
             Array.Sort(m_fields, (left, right) => m_comparer.Compare(left.ObfuscatedName + left.OriginalFieldType, right.ObfuscatedName + right.OriginalFieldType));
+            Array.Sort(m_methods, (left, right) => m_comparer.Compare(left.SortKey, right.SortKey));
+        }
+
+        public bool TryDeobfuscateMethod(string obfuscatedMethodName, string[] parameterTypes, out string originalMethodName)
+        {
+            string lookup = $"{obfuscatedMethodName}({string.Join(",", parameterTypes)})";
+
+            int lo = 0;
+            int hi = m_methods.Length - 1;
+            while (lo <= hi)
+            {
+                int i = lo + ((hi - lo) >> 1);
+                ObfuscatedMethod field = m_methods[i];
+
+                int order = m_comparer.Compare(field.SortKey, lookup);
+
+                if (order == 0)
+                {
+                    originalMethodName = field.OriginalName;
+                    return true;
+                }
+
+                if (order < 0)
+                {
+                    lo = i + 1;
+                }
+                else
+                {
+                    hi = i - 1;
+                }
+            }
+
+            originalMethodName = null;
+            return false;
+
+
         }
 
         public bool TryDeobfuscateField(string obfuscatedFieldName, string originalFieldType, out string originalFieldName)
@@ -174,7 +260,7 @@ namespace ClrMD.Extensions.Obfuscation
                 where obfuscatedTypeName != null
                 select new
                 {
-                    TypeKey = Tuple.Create((string) moduleNode.Element("name"), obfuscatedTypeName),
+                    TypeKey = Tuple.Create((string) moduleNode.Element("name"), obfuscatedTypeName.Replace("/", "+")),
                     TypeNode = typeNode
                 }).ToDictionary(item => item.TypeKey, item => new TypeDeobfuscator(item.TypeNode));
         }
@@ -192,7 +278,7 @@ namespace ClrMD.Extensions.Obfuscation
             {
                 TypeDeobfuscator result;
                 string moduleName = Path.GetFileName(type.Module.FileName);
-                var key = Tuple.Create(moduleName, GetDotFuscatorTypeName(type));
+                var key = Tuple.Create(moduleName, type.Name);
 
                 if (m_typeMap.TryGetValue(key, out result))
                     return result;
@@ -200,13 +286,6 @@ namespace ClrMD.Extensions.Obfuscation
 
             return DummyTypeDeobfuscator.GetDeobfuscator(type.Name);
         }
-
-        private string GetDotFuscatorTypeName(ClrType type)
-        {
-            return type.Name.Replace('+', '/');
-        }
-
-
 
         public string ObfuscateSimpleType(string deobfuscatedTypeName)
         {
@@ -242,7 +321,73 @@ namespace ClrMD.Extensions.Obfuscation
             return result;
         }
 
+        public string DeobfuscateCallstack(string callstack)
+        {
+            string[] lines = callstack.Split(new[] {'\r', '\n'}, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                if (!line.Contains("System.Obfuscation"))
+                {
+                    continue;
+                }
+                string prefix;
+                string[] args;
+                if (TypeNameRegex.TryExtractMethodInfo(line, out prefix, out args))
+                {
+                    string declaringType = prefix.Substring(0, prefix.LastIndexOf("."));
+                    string deObfType = TypeNameRegex.RemoveArityIndicators(DeobfuscateSimpleType(declaringType));
 
+                    string methodName = prefix.Substring(declaringType.Length + 1);
+                    for (int j = 0; j < args.Length; j++)
+                    {
+                        string arg = DeobfuscateType(args[j]);
+
+                        if (arg == args[j])
+                        {
+                            if (TypeNameRegex.CouldBeNestedType(arg))
+                            {
+                                //try as nested type.....
+                                var arg2 = declaringType + "+" + arg;
+                                var arg3 = DeobfuscateType(arg2);
+                                if (arg2 != arg3)
+                                {
+                                    arg = arg3;
+                                }
+                            }
+                            else
+                            {
+                                arg = TypeNameRegex.FixMethodArgumentType(arg);
+                            }
+                        }
+
+                        args[j] = arg;
+                    }
+                    var obf = GetTypeDeobfuscator(declaringType);
+                    if (obf != null)
+                    {
+                        string deObfName;
+                        if (obf.TryDeobfuscateMethod(methodName, args, out deObfName))
+                        {
+                            lines[i] = $"{deObfType}.{deObfName}({string.Join(",", args)})";
+                         //   break;
+                        }
+
+                      /*  var clrType = ClrMDSession.Current.Heap.GetTypeByName(obf.ObfuscatedName);
+                        if (clrType?.BaseType != null)
+                        {
+                            obf = GetTypeDeobfuscator(clrType.BaseType); 
+                        }
+                        else
+                        {
+                            obf = null;
+                        }*/
+                    }
+                }
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
 
         public string DeobfuscateType(string obfuscatedTypeName)
         {

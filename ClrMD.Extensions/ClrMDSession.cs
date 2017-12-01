@@ -215,6 +215,15 @@ namespace ClrMD.Extensions
             return m_deobfuscator.GetTypeDeobfuscator(type);
         }
 
+
+        public string DeobfuscateStack(string obfuscatedStackTrace)
+        {
+            if (m_deobfuscator == null)
+                return obfuscatedStackTrace;
+
+            return m_deobfuscator.DeobfuscateCallstack(obfuscatedStackTrace);
+        }
+
         public string DeobfuscateType(string obfuscatedTypeName)
         {
             if (m_deobfuscator == null)
