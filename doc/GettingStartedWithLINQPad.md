@@ -11,8 +11,8 @@ a boring and tedious task, but now you can code your way to the solution!
 
 To open a dump with LINQPad, you must launch LINQPad in the same architecture (x86 or x64) as the machine that created the dump.
 
-- [LINQPad (x86) Download](http://www.linqpad.net/GetFile.aspx?LINQPad4.zip)
-- [LINQPad (x64) Download](http://www.linqpad.net/GetFile.aspx?LINQPad4-AnyCPU.zip)
+- [LINQPad (x86) Download](http://www.linqpad.net/GetFile.aspx?LINQPad5.zip)
+- [LINQPad (x64) Download](http://www.linqpad.net/GetFile.aspx?LINQPad5-AnyCPU.zip)
 
 If you don’t use the corresponding architecture, you will get this error:
 ![Mismatched Architecture exception](../img/LINQPad_MismatchedArchitecture.png)
