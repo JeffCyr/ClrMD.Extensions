@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Dynamic;
 using System.Linq;
 using System.Net;
@@ -157,24 +158,38 @@ namespace ClrMD.Extensions
             return Type is UndefinedType;
         }
 
+        private static ClrInstanceField FindField(ClrType target, ObfuscatedField oField)
+        {
+            string oFieldType = ClrMDSession.Current.ObfuscateType(oField.OriginalFieldType);
+            var field = target.Fields.FirstOrDefault(f =>
+            {
+                bool nameMatch = string.Equals(f.Name, oField.ObfuscatedName, StringComparison.Ordinal);
+                bool typeMatch = string.Equals(f.Type.Name, oFieldType, StringComparison.Ordinal);
+                return nameMatch && typeMatch;
+            });
+            return field;
+        }
+
         public ClrInstanceField GetField(string fieldName)
         {
             ClrInstanceField field = null;
-            string obfuscatedName;
+            ObfuscatedField obfuscatedField;
 
-            if (m_deobfuscator.TryObfuscateField(fieldName, out obfuscatedName))
-                field = Type.GetFieldByName(obfuscatedName);
+            if (m_deobfuscator.TryObfuscateField(fieldName, out obfuscatedField))
+                field = FindField(Type, obfuscatedField);
 
             string backingFieldName = GetAutomaticPropertyField(fieldName);
 
-            if (m_deobfuscator.TryObfuscateField(backingFieldName, out obfuscatedName))
-                field = Type.GetFieldByName(obfuscatedName);
+            if (m_deobfuscator.TryObfuscateField(backingFieldName, out obfuscatedField))
+                field = FindField(Type, obfuscatedField);
 
             if (field == null)
                 field = Type.GetFieldByName(fieldName);
 
             if (field == null)
                 field = Type.GetFieldByName(backingFieldName);
+
+
 
             return field;
         }
@@ -184,12 +199,34 @@ namespace ClrMD.Extensions
             return "<" + propertyName + ">" + "k__BackingField";
         }
 
-        public string GetFieldName(string fieldName)
+        public string GetFieldName(string fieldName) => GetFieldName(fieldName, null);
+        public string GetFieldName(string fieldName, ClrType fieldType)
         {
             string deobfuscatedName;
 
-            if (m_deobfuscator.TryDeobfuscateField(fieldName, out deobfuscatedName))
-                fieldName = deobfuscatedName;
+            string typeName = fieldType?.Name;
+            var deObfType = ClrMDSession.Current.DeobfuscateType(typeName);
+
+            var obf = m_deobfuscator;
+            var target = Type;
+            while (obf != null)
+            {
+                if (obf.TryDeobfuscateField(fieldName, deObfType, out deobfuscatedName))
+                {
+                    fieldName = deobfuscatedName;
+                    break;
+                }
+
+                if (target.BaseType != null)
+                {
+                    target = target.BaseType;
+                    obf = ClrMDSession.Current.GetTypeDeobfuscator(target);
+                }
+                else
+                {
+                    break;
+                }
+            }
 
             var match = s_fieldNameRegex.Match(fieldName);
 
@@ -601,7 +638,7 @@ namespace ClrMD.Extensions
 
                     builder.AppendLine();
                     builder.Append(indentation);
-                    builder.Append(GetFieldName(field.Name));
+                    builder.Append(GetFieldName(field.Name, field.Type));
                     builder.Append(": ");
 
                     if (fieldValue.HasSimpleValue || field.Type.IsObjectReference || !includeInteriorFields)
@@ -825,7 +862,7 @@ namespace ClrMD.Extensions
                         yield return "[Visualizer]";
 
                     foreach (var field in Fields)
-                        yield return GetFieldName(field.Name);
+                        yield return GetFieldName(field.Name, field.Type);
                 }
             }
 
@@ -900,7 +937,7 @@ namespace ClrMD.Extensions
             }
             else if (!IsNull() && Type.IsArray)
             {
-                yield return m_deobfuscator.OriginalName;
+                yield return ClrMDSession.Current.DeobfuscateType(m_deobfuscator.ObfuscatedName);  //m_deobfuscator.OriginalName;
                 yield return GetAddressString();
                 yield return ArrayLength;
 
@@ -908,7 +945,7 @@ namespace ClrMD.Extensions
             }
             else
             {
-                yield return m_deobfuscator.OriginalName;
+                yield return ClrMDSession.Current.DeobfuscateType(m_deobfuscator.ObfuscatedName);
                 yield return GetAddressString();
 
                 if (!IsNull())

@@ -157,7 +157,8 @@ namespace ClrMD.Extensions
             foreach (ClrStackFrame frame in thread.StackTrace)
                 builder.AppendLine(frame.DisplayString);
 
-            return builder.ToString();
+            string stack = builder.ToString();
+            return ClrMDSession.Current.DeobfuscateStack(stack);
         }
 
         public static ClrObjectWrapper Wrap(this ClrObject item)
