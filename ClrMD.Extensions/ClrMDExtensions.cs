@@ -3,14 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using ClrMD.Extensions.Core;
 using Microsoft.Diagnostics.Runtime;
 
 namespace ClrMD.Extensions
 {
     public static class ClrMDExtensions
     {
-        public static IEnumerable<T> Cast<T>(this IEnumerable<ClrObject> source)
+        public static IEnumerable<T> Cast<T>(this IEnumerable<ClrDynamic> source)
         {
             foreach (var item in source)
                 yield return (T)(dynamic)item;
@@ -18,108 +17,90 @@ namespace ClrMD.Extensions
 
         public static ClrType GetSafeObjectType(this ClrHeap heap, ulong address)
         {
-            return heap.GetObjectType(address) ?? new UnknownType(heap);
+            return heap.GetObjectType(address) ?? ClrMDSession.Current.ErrorType;
         }
 
-        public static ClrObject GetClrObject(this ClrHeap heap, ulong address)
+        public static ClrDynamic GetDynamicObject(this ClrHeap heap, ulong address)
         {
-            return new ClrObject(address, heap.GetSafeObjectType(address));
+            return new ClrDynamic(address, heap.GetSafeObjectType(address));
         }
 
-        public static IEnumerable<ClrObject> EnumerateClrObjects(this ClrHeap heap)
+        public static IEnumerable<ClrDynamic> EnumerateDynamicObjects(this ClrHeap heap)
         {
-            return from address in heap.EnumerateObjects()
-                   select heap.GetClrObject(address);
+            return from address in heap.EnumerateObjectAddresses()
+                   select heap.GetDynamicObject(address);
         }
 
-        public static IEnumerable<ClrObject> EnumerateClrObjects(this ClrHeap heap, ClrType type)
+        public static IEnumerable<ClrDynamic> EnumerateDynamicObjects(this ClrHeap heap, ClrType type)
         {
-            return from address in heap.EnumerateObjects()
+            return from address in heap.EnumerateObjectAddresses()
                    let objectType = heap.GetSafeObjectType(address)
                    where objectType == type
-                   select new ClrObject(address, type);
+                   select new ClrDynamic(address, type);
         }
 
-        public static IEnumerable<ClrObject> EnumerateClrObjects(this ClrHeap heap, params ClrType[] types)
+        public static IEnumerable<ClrDynamic> EnumerateDynamicObjects(this ClrHeap heap, params ClrType[] types)
         {
-            return heap.EnumerateClrObjects((IEnumerable<ClrType>)types);
+            return heap.EnumerateDynamicObjects((IEnumerable<ClrType>)types);
         }
 
-        public static IEnumerable<ClrObject> EnumerateClrObjects(this ClrHeap heap, IEnumerable<ClrType> types)
+        public static IEnumerable<ClrDynamic> EnumerateDynamicObjects(this ClrHeap heap, IEnumerable<ClrType> types)
         {
             if (types == null)
-                return heap.EnumerateClrObjects();
+                return heap.EnumerateDynamicObjects();
 
             IList<ClrType> castedTypes = types as IList<ClrType> ?? types.ToList();
 
             if (castedTypes.Count == 0)
-                return heap.EnumerateClrObjects();
+                return heap.EnumerateDynamicObjects();
 
             if (castedTypes.Count == 1)
-                return heap.EnumerateClrObjects(castedTypes[0]);
+                return heap.EnumerateDynamicObjects(castedTypes[0]);
 
             HashSet<ClrType> set = new HashSet<ClrType>(castedTypes);
 
-            return from address in heap.EnumerateObjects()
+            return from address in heap.EnumerateObjectAddresses()
                    let type = heap.GetSafeObjectType(address)
                    where set.Contains(type)
-                   select new ClrObject(address, type);
+                   select new ClrDynamic(address, type);
         }
 
-        public static IEnumerable<ClrObject> EnumerateClrObjects(this ClrHeap heap, string typeName)
+        public static IEnumerable<ClrDynamic> EnumerateDynamicObjects(this ClrHeap heap, string typeName)
         {
-            if (typeName.Contains("*"))
+            if (!typeName.Contains("*"))
             {
-                string typeNameRegex = "^" + Regex.Escape(typeName).Replace("\\*", ".*") + "$";
-                Regex regex = new Regex(typeNameRegex, RegexOptions.Compiled | RegexOptions.IgnoreCase);
-                
-                return from address in heap.EnumerateObjects()
-                       let type = heap.GetSafeObjectType(address)
-                       where type != null && regex.IsMatch(type.Name)
-                       select new ClrObject(address, type);
+                var type = 
+                    (from t in heap.EnumerateTypes()
+                    let deobfuscator = ClrMDSession.Current.GetTypeDeobfuscator(t)
+                    where deobfuscator.OriginalName == typeName
+                    select t).First();
+
+                return (ClrDynamic)heap.EnumerateObjects().First(item => item.Type == type);
             }
 
-            return from address in heap.EnumerateObjects()
-                   let type = heap.GetSafeObjectType(address)
-                   where type != null && type.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase)
-                   select new ClrObject(address, type);
+            var regex = new Regex($"^{Regex.Escape(typeName).Replace("\\*", ".*")}$",
+                RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+            var types = 
+                from type in heap.EnumerateTypes()
+                let deobfuscator = ClrMDSession.Current.GetTypeDeobfuscator(type)
+                where regex.IsMatch(deobfuscator.OriginalName)
+                select type;
+
+            var typeSet = new HashSet<ClrType>(types);
+
+            return heap.EnumerateObjects().Where(o => typeSet.Contains(o.Type)).Select(o => (ClrDynamic)o);
         }
 
-        public static IEnumerable<ClrObject> EnumerateClrObjects(this ClrHeap heap, params string[] typeNames)
+        public static ClrDynamic DowncastToBase(this ClrDynamic clrObject)
         {
-            return heap.EnumerateClrObjects((IEnumerable<string>)typeNames);
-        }
-
-        public static IEnumerable<ClrObject> EnumerateClrObjects(this ClrHeap heap, IEnumerable<string> typeNames)
-        {
-            if (typeNames == null)
-                return heap.EnumerateClrObjects();
-
-            IList<string> castedTypes = typeNames as IList<string> ?? typeNames.ToList();
-
-            if (castedTypes.Count == 0)
-                return heap.EnumerateClrObjects();
-
-            if (castedTypes.Count == 1)
-                return heap.EnumerateClrObjects(castedTypes[0]);
-
-            HashSet<string> set = new HashSet<string>(castedTypes, StringComparer.OrdinalIgnoreCase);
-
-            return from address in heap.EnumerateObjects()
-                   let type = heap.GetSafeObjectType(address)
-                   where type != null && set.Contains(type.Name)
-                   select new ClrObject(address, type);
-        }
-
-        public static ClrObject DowncastToBase(this ClrObject clrObject)
-        {
-            return clrObject?.Type?.BaseType != null ? new ClrObject(clrObject.Address, clrObject.Type.BaseType) : null;
+            return clrObject?.Type?.BaseType != null ? new ClrDynamic(clrObject.Address, clrObject.Type.BaseType) : null;
         }
 
         public class StackFrameInfo
         {
             public string Function;
-            public List<ClrObject> Objects;
+            public List<ClrDynamic> Objects;
         }
 
         public static List<StackFrameInfo> GetDetailedStackTrace(this ClrThread thread)
@@ -132,10 +113,10 @@ namespace ClrMD.Extensions
             foreach (ClrStackFrame frame in thread.StackTrace)
             {
                 ClrStackFrame f = frame;
-                List<ClrObject> objectsInFrame = stackObjects
+                List<ClrDynamic> objectsInFrame = stackObjects
                     .Where(o => o.Address > lastAddress && o.Address <= f.StackPointer)
                     .OrderBy(o => o.Address)
-                    .Select(o => ClrMDSession.Current.Heap.GetClrObject(o.Object))
+                    .Select(o => ClrMDSession.Current.Heap.GetDynamicObject(o.Object))
                     .ToList();
 
                 stackframes.Add(new StackFrameInfo
@@ -160,7 +141,7 @@ namespace ClrMD.Extensions
             return builder.ToString();
         }
 
-        public static ClrObjectWrapper Wrap(this ClrObject item)
+        public static ClrObjectWrapper Wrap(this ClrDynamic item)
         {
             return new ClrObjectWrapper(item);
         }
@@ -198,9 +179,9 @@ namespace ClrMD.Extensions
             get { return Object.Type.Name; }
         }
 
-        public ClrObject Object { get; set; }
+        public ClrDynamic Object { get; set; }
 
-        public ClrObjectWrapper(ClrObject item)
+        public ClrObjectWrapper(ClrDynamic item)
         {
             Object = item;
         }

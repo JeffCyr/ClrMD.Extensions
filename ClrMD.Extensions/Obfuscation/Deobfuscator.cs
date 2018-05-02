@@ -147,7 +147,9 @@ namespace ClrMD.Extensions.Obfuscation
     public class Deobfuscator
     {
         // (ModuleName, TypeName) -> TypeDeobfuscator
-        private Dictionary<Tuple<string, string>, TypeDeobfuscator> m_typeMap;
+        private readonly Dictionary<(string, string), ITypeDeobfuscator> m_obfuscationMap;
+
+        private readonly Dictionary<ClrType, ITypeDeobfuscator> m_typeLookup;
 
         public string RenamingMapPath { get; private set; }
 
@@ -157,37 +159,47 @@ namespace ClrMD.Extensions.Obfuscation
 
             var doc = XDocument.Load(renamingMapFilePath);
 
-            m_typeMap = (from moduleNode in doc.Elements("dotfuscatorMap").Elements("mapping").Elements("module")
+            m_obfuscationMap = (from moduleNode in doc.Elements("dotfuscatorMap").Elements("mapping").Elements("module")
                          from typeNode in moduleNode.Elements("type")
                          let obfuscatedTypeName = (string)typeNode.Element("newname")
                          where obfuscatedTypeName != null
                          select new
                                 {
-                                    TypeKey = Tuple.Create((string)moduleNode.Element("name"), obfuscatedTypeName),
+                                    TypeKey = ((string)moduleNode.Element("name"), obfuscatedTypeName),
                                     TypeNode = typeNode
-                                }).ToDictionary(item => item.TypeKey, item => new TypeDeobfuscator(item.TypeNode));
+                                }).ToDictionary(item => item.TypeKey, item => (ITypeDeobfuscator)new TypeDeobfuscator(item.TypeNode));
+
+            m_typeLookup = new Dictionary<ClrType, ITypeDeobfuscator>();
         }
 
         public ITypeDeobfuscator GetTypeDeobfuscator(string typeName)
         {
-            return (from item in m_typeMap
+            return (from item in m_obfuscationMap
                     where item.Key.Item2 == typeName
                     select item.Value).FirstOrDefault() ?? DummyTypeDeobfuscator.GetDeobfuscator(typeName);
         }
 
         public ITypeDeobfuscator GetTypeDeobfuscator(ClrType type)
         {
+            ITypeDeobfuscator result;
+
+            if (m_typeLookup.TryGetValue(type, out result))
+                return result;
+
             if (type.Module != null && type.Module.IsFile)
             {
-                TypeDeobfuscator result;
                 string moduleName = Path.GetFileName(type.Module.FileName);
-                var key = Tuple.Create(moduleName, GetDotFuscatorTypeName(type));
+                var key = (moduleName, GetDotFuscatorTypeName(type));
 
-                if (m_typeMap.TryGetValue(key, out result))
-                    return result;
+                m_obfuscationMap.TryGetValue(key, out result);
             }
 
-            return DummyTypeDeobfuscator.GetDeobfuscator(type.Name);
+            if (result == null)
+                result = DummyTypeDeobfuscator.GetDeobfuscator(type.Name);
+
+            m_typeLookup.Add(type, result);
+
+            return result;
         }
 
         private string GetDotFuscatorTypeName(ClrType type)
@@ -197,14 +209,14 @@ namespace ClrMD.Extensions.Obfuscation
 
         public string ObfuscateType(string deobfuscatedTypeName)
         {
-            return (from deobfuscator in m_typeMap.Values
+            return (from deobfuscator in m_obfuscationMap.Values
                     where deobfuscator.OriginalName.Equals(deobfuscatedTypeName, StringComparison.OrdinalIgnoreCase)
                     select deobfuscator.ObfuscatedName).FirstOrDefault() ?? deobfuscatedTypeName;
         }
 
         public string DeobfuscateType(string obfuscatedTypeName)
         {
-            return (from deobfuscator in m_typeMap.Values
+            return (from deobfuscator in m_obfuscationMap.Values
                     where deobfuscator.ObfuscatedName.Equals(obfuscatedTypeName, StringComparison.OrdinalIgnoreCase)
                     select deobfuscator.OriginalName).FirstOrDefault() ?? obfuscatedTypeName;
         }

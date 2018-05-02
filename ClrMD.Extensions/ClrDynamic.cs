@@ -6,7 +6,6 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
-using ClrMD.Extensions.Core;
 using ClrMD.Extensions.LINQPad;
 using ClrMD.Extensions.Obfuscation;
 using LINQPad;
@@ -14,48 +13,38 @@ using Microsoft.Diagnostics.Runtime;
 
 namespace ClrMD.Extensions
 {
-    public class ClrObject : DynamicObject, IEnumerable<ClrObject>, IComparable, ICustomMemberProvider
+    public class ClrDynamic : DynamicObject, IEnumerable<ClrDynamic>, IComparable, ICustomMemberProvider
     {
         public const ulong NullAddress = 0;
         private const string ToStringFieldIndentation = "  ";
         private static readonly Regex s_fieldNameRegex = new Regex("^<([^>]+)>k__BackingField$", RegexOptions.Compiled);
 
         private readonly ITypeDeobfuscator m_deobfuscator;
-        private readonly Lazy<TypeVisualizer> m_lazyVisualizer;
 
-        public ulong Address { get; private set; }
+        public ulong Address { get; }
 
-        public ClrType Type { get; private set; }
+        public ClrType Type { get; }
+        
+        public bool IsInterior { get; }
 
-        public string TypeName
-        {
-            get { return m_deobfuscator.OriginalName; }
-        }
+        public string TypeName => m_deobfuscator.OriginalName;
 
-        public bool IsInterior { get; private set; }
+        public ClrHeap Heap => Type.Heap;
 
-        public ClrHeap Heap
-        {
-            get { return Type.Heap; }
-        }
-
-        public ClrObject this[string fieldName]
+        public ClrDynamic this[string fieldName]
         {
             get
             {
                 ClrInstanceField field = GetField(fieldName);
 
-                //if (field == null)
-                //    throw new ArgumentException(string.Format("Field '{0}' not found in Type '{1}'", fieldName, Type.Name));
-
                 if (field == null)
-                    return new ClrObject(0, new UndefinedType(Heap));
+                    return new ClrDynamic(0, ClrMDSession.Current.ErrorType);
 
                 return this[field];
             }
         }
 
-        public ClrObject this[ClrInstanceField field]
+        public ClrDynamic this[ClrInstanceField field]
         {
             get
             {
@@ -63,7 +52,7 @@ namespace ClrMD.Extensions
             }
         }
 
-        public ClrObject this[int arrayIndex]
+        public ClrDynamic this[int arrayIndex]
         {
             get
             {
@@ -75,17 +64,11 @@ namespace ClrMD.Extensions
                 if (arrayIndex >= arrayLength)
                     throw new IndexOutOfRangeException(string.Format("Array index '{0}' is not between 0 and '{1}'", arrayIndex, arrayLength));
 
-                return GetInnerObject(Type.GetArrayElementAddress(Address, arrayIndex), Type.ArrayComponentType);
+                return GetInnerObject(Type.GetArrayElementAddress(Address, arrayIndex), Type.ComponentType);
             }
         }
 
-        public IEnumerable<ClrInstanceField> Fields
-        {
-            get
-            {
-                return Type.Fields;
-            }
-        }
+        public IEnumerable<ClrInstanceField> Fields => Type.Fields;
 
         public int ArrayLength
         {
@@ -98,15 +81,9 @@ namespace ClrMD.Extensions
             }
         }
 
-        public bool HasSimpleValue
-        {
-            get { return SimpleValueHelper.IsSimpleValue(Type); }
-        }
+        public bool HasSimpleValue => SimpleValueHelper.IsSimpleValue(Type);
 
-        public object SimpleValue
-        {
-            get { return SimpleValueHelper.GetSimpleValue(this); }
-        }
+        public object SimpleValue => SimpleValueHelper.GetSimpleValue(this);
 
         public object SimpleDisplayValue
         {
@@ -118,22 +95,17 @@ namespace ClrMD.Extensions
             }
         }
 
-        public ulong Size
-        {
-            get { return Type.GetSize(Address); }
-        }
+        public ulong Size => Type.GetSize(Address);
 
-        public dynamic Dynamic
-        {
-            get { return this; }
-        }
+        public dynamic Dynamic => this;
 
-        public object Visualizer
-        {
-            get { return m_lazyVisualizer.Value?.GetValue(this); }
-        }
+        public object Visualizer => TypeVisualizer.TryGetVisualizer(this)?.GetValue(this);
 
-        public ClrObject(ulong address, ClrType type, bool isInterior = false)
+        public ClrDynamic(ClrObject obj)
+            : this(obj.Address, obj.Type, false)
+        { }
+
+        public ClrDynamic(ulong address, ClrType type, bool isInterior = false)
         {
             Address = address;
             Type = type;
@@ -143,18 +115,16 @@ namespace ClrMD.Extensions
                 m_deobfuscator = DummyTypeDeobfuscator.GetDeobfuscator(type.Name);
             else
                 m_deobfuscator = ClrMDSession.Current.GetTypeDeobfuscator(type);
-
-            m_lazyVisualizer = new Lazy<TypeVisualizer>(() => TypeVisualizer.TryGetVisualizer(this));
         }
 
         public bool IsNull()
         {
-            return Address == NullAddress || Type is UnknownType;
+            return Address == NullAddress || Type == ClrMDSession.Current.ErrorType;
         }
 
         public bool IsUndefined()
         {
-            return Type is UndefinedType;
+            return Type == ClrMDSession.Current.ErrorType;
         }
 
         public ClrInstanceField GetField(string fieldName)
@@ -199,9 +169,9 @@ namespace ClrMD.Extensions
             return fieldName;
         }
 
-        public IEnumerable<ClrObject> EnumerateReferenceBy()
+        public IEnumerable<ClrDynamic> EnumerateReferenceBy()
         {
-            IEnumerable<ClrObject> allObjects;
+            IEnumerable<ClrDynamic> allObjects;
 
             if (ClrMDSession.Current != null)
             {
@@ -212,27 +182,27 @@ namespace ClrMD.Extensions
             }
             else
             {
-                allObjects = Type.Heap.EnumerateClrObjects();
+                allObjects = Type.Heap.EnumerateDynamicObjects();
             }
 
             return EnumerateReferenceBy(allObjects);
         }
 
-        public IEnumerable<ClrObject> EnumerateReferenceBy(params ClrType[] typeFilter)
+        public IEnumerable<ClrDynamic> EnumerateReferenceBy(params ClrType[] typeFilter)
         {
-            return EnumerateReferenceBy(Type.Heap.EnumerateClrObjects(typeFilter));
+            return EnumerateReferenceBy(Type.Heap.EnumerateDynamicObjects(typeFilter));
         }
 
-        public IEnumerable<ClrObject> EnumerateReferenceBy(IEnumerable<ClrObject> allObjects)
+        public IEnumerable<ClrDynamic> EnumerateReferenceBy(IEnumerable<ClrDynamic> allObjects)
         {
             return from parent in allObjects
                    where parent.EnumerateReferencesAddress().Contains(Address)
                    select parent;
         }
 
-        public IEnumerable<ClrObject> EnumerateReferences()
+        public IEnumerable<ClrDynamic> EnumerateReferences()
         {
-            return EnumerateReferencesAddress().Select(address => Type.Heap.GetClrObject(address));
+            return EnumerateReferencesAddress().Select(address => Type.Heap.GetDynamicObject(address));
         }
 
         public IEnumerable<ulong> EnumerateReferencesAddress()
@@ -243,7 +213,7 @@ namespace ClrMD.Extensions
             return references;
         }
 
-        public IEnumerable<ClrObject> EnumerateDictionaryValues()
+        public IEnumerable<ClrDynamic> EnumerateDictionaryValues()
         {
             if (!TypeName.StartsWith("System.Collections.Generic.Dictionary<"))
                 yield break;
@@ -265,7 +235,7 @@ namespace ClrMD.Extensions
             }
         }
 
-        private ClrObject GetInnerObject(ulong pointer, ClrType type)
+        private ClrDynamic GetInnerObject(ulong pointer, ClrType type)
         {
             ulong fieldAddress;
             ClrType actualType = type;
@@ -293,7 +263,7 @@ namespace ClrMD.Extensions
                 throw new NotSupportedException(string.Format("Object type not supported '{0}'", type.Name));
             }
 
-            return new ClrObject(fieldAddress, actualType, !type.IsObjectReference);
+            return new ClrDynamic(fieldAddress, actualType, !type.IsObjectReference);
         }
 
         #region Operators
@@ -308,7 +278,7 @@ namespace ClrMD.Extensions
                 return Equals(other, SimpleValue);
             }
 
-            ClrObject clrOther = other as ClrObject;
+            ClrDynamic clrOther = other as ClrDynamic;
 
             if (clrOther != null)
                 return Address == clrOther.Address;
@@ -332,37 +302,37 @@ namespace ClrMD.Extensions
             return Comparer.DefaultInvariant.Compare(other, Address);
         }
 
-        public static bool operator ==(ClrObject left, object right)
+        public static bool operator ==(ClrDynamic left, object right)
         {
             return Equals(left, right);
         }
 
-        public static bool operator !=(ClrObject left, object right)
+        public static bool operator !=(ClrDynamic left, object right)
         {
             return !Equals(left, right);
         }
 
-        public static bool operator <(ClrObject left, object right)
+        public static bool operator <(ClrDynamic left, object right)
         {
             return Comparer.DefaultInvariant.Compare(left, right) > 0;
         }
 
-        public static bool operator >(ClrObject left, object right)
+        public static bool operator >(ClrDynamic left, object right)
         {
             return Comparer.DefaultInvariant.Compare(left, right) < 0;
         }
 
-        public static bool operator <=(ClrObject left, object right)
+        public static bool operator <=(ClrDynamic left, object right)
         {
             return Comparer.DefaultInvariant.Compare(left, right) >= 0;
         }
 
-        public static bool operator >=(ClrObject left, object right)
+        public static bool operator >=(ClrDynamic left, object right)
         {
             return Comparer.DefaultInvariant.Compare(left, right) <= 0;
         }
 
-        public static bool operator true(ClrObject obj)
+        public static bool operator true(ClrDynamic obj)
         {
             if (obj == null)
                 throw new ArgumentNullException("obj");
@@ -373,7 +343,7 @@ namespace ClrMD.Extensions
             throw new InvalidCastException(string.Format("Cannot cast type '{0}' to bool.", obj.Type));
         }
 
-        public static bool operator false(ClrObject obj)
+        public static bool operator false(ClrDynamic obj)
         {
             if (obj == null)
                 throw new ArgumentNullException("obj");
@@ -384,7 +354,7 @@ namespace ClrMD.Extensions
             throw new InvalidCastException(string.Format("Cannot cast type '{0}' to bool.", obj.Type));
         }
 
-        public static bool operator !(ClrObject obj)
+        public static bool operator !(ClrDynamic obj)
         {
             if (obj == null)
                 throw new ArgumentNullException("obj");
@@ -395,67 +365,67 @@ namespace ClrMD.Extensions
             throw new InvalidCastException(string.Format("Cannot cast type '{0}' to bool.", obj.Type));
         }
 
-        public static explicit operator bool(ClrObject obj)
+        public static explicit operator bool(ClrDynamic obj)
         {
             return (bool)obj.SimpleValue;
         }
 
-        public static explicit operator char(ClrObject obj)
+        public static explicit operator char(ClrDynamic obj)
         {
             return (char)obj.SimpleValue;
         }
 
-        public static explicit operator sbyte(ClrObject obj)
+        public static explicit operator sbyte(ClrDynamic obj)
         {
             return (sbyte)obj.SimpleValue;
         }
 
-        public static explicit operator byte(ClrObject obj)
+        public static explicit operator byte(ClrDynamic obj)
         {
             return (byte)obj.SimpleValue;
         }
 
-        public static explicit operator short(ClrObject obj)
+        public static explicit operator short(ClrDynamic obj)
         {
             return (short)obj.SimpleValue;
         }
 
-        public static explicit operator ushort(ClrObject obj)
+        public static explicit operator ushort(ClrDynamic obj)
         {
             return (ushort)obj.SimpleValue;
         }
 
-        public static explicit operator int(ClrObject obj)
+        public static explicit operator int(ClrDynamic obj)
         {
             return (int)obj.SimpleValue;
         }
 
-        public static explicit operator uint(ClrObject obj)
+        public static explicit operator uint(ClrDynamic obj)
         {
             return (uint)obj.SimpleValue;
         }
 
-        public static explicit operator long(ClrObject obj)
+        public static explicit operator long(ClrDynamic obj)
         {
             return (long)obj.SimpleValue;
         }
 
-        public static explicit operator ulong(ClrObject obj)
+        public static explicit operator ulong(ClrDynamic obj)
         {
             return (ulong)obj.SimpleValue;
         }
 
-        public static explicit operator float(ClrObject obj)
+        public static explicit operator float(ClrDynamic obj)
         {
             return (float)obj.SimpleValue;
         }
 
-        public static explicit operator double(ClrObject obj)
+        public static explicit operator double(ClrDynamic obj)
         {
             return (double)obj.SimpleValue;
         }
 
-        public static explicit operator string(ClrObject obj)
+        public static explicit operator string(ClrDynamic obj)
         {
             if (obj.Type.IsEnum)
                 return obj.Type.GetEnumName(obj.SimpleValue);
@@ -463,31 +433,36 @@ namespace ClrMD.Extensions
             return (string)obj.SimpleValue;
         }
 
-        public static explicit operator Guid(ClrObject obj)
+        public static explicit operator Guid(ClrDynamic obj)
         {
             return (Guid)obj.SimpleValue;
         }
 
-        public static explicit operator TimeSpan(ClrObject obj)
+        public static explicit operator TimeSpan(ClrDynamic obj)
         {
             return (TimeSpan)obj.SimpleValue;
         }
 
-        public static explicit operator DateTime(ClrObject obj)
+        public static explicit operator DateTime(ClrDynamic obj)
         {
             return (DateTime)obj.SimpleValue;
         }
 
-        public static explicit operator IPAddress(ClrObject obj)
+        public static explicit operator IPAddress(ClrDynamic obj)
         {
             return (IPAddress)obj.SimpleValue;
+        }
+
+        public static explicit operator ClrDynamic(ClrObject obj)
+        {
+            return new ClrDynamic(obj);
         }
 
         #endregion
 
         #region IEnumerable
 
-        public IEnumerator<ClrObject> GetEnumerator()
+        public IEnumerator<ClrDynamic> GetEnumerator()
         {
             if (Type.IsArray)
             {
@@ -597,7 +572,7 @@ namespace ClrMD.Extensions
             {
                 foreach (ClrInstanceField field in Fields)
                 {
-                    ClrObject fieldValue = this[field];
+                    ClrDynamic fieldValue = this[field];
 
                     builder.AppendLine();
                     builder.Append(indentation);
@@ -645,7 +620,7 @@ namespace ClrMD.Extensions
                 return false;
             }
 
-            public static object GetSimpleValue(ClrObject obj)
+            public static object GetSimpleValue(ClrDynamic obj)
             {
                 if (obj.IsNull())
                     return null;
@@ -689,7 +664,7 @@ namespace ClrMD.Extensions
                 throw new InvalidOperationException(string.Format("SimpleValue not available for type '{0}'", type.Name));
             }
 
-            public static string GetSimpleValueString(ClrObject obj)
+            public static string GetSimpleValueString(ClrDynamic obj)
             {
                 object value = obj.SimpleValue;
 
@@ -741,7 +716,7 @@ namespace ClrMD.Extensions
                 }
             }
 
-            private static IPAddress GetIPAddress(ClrObject ipAddress)
+            private static IPAddress GetIPAddress(ClrDynamic ipAddress)
             {
                 const int AddressFamilyInterNetworkV6 = 23;
                 const int IPv4AddressBytes = 4;
@@ -857,7 +832,7 @@ namespace ClrMD.Extensions
                 yield return typeof(int);
 
                 // Items
-                yield return typeof(IEnumerable<ClrObject>);
+                yield return typeof(IEnumerable<ClrDynamic>);
             }
             else
             {
@@ -875,7 +850,7 @@ namespace ClrMD.Extensions
                     for (int i = 0; i < Type.Fields.Count; ++i)
                     {
                         if (LinqPadExtensions.SmartNavigation)
-                            yield return HasSimpleValue ? GetSimpleValueType() : typeof (ClrObject);
+                            yield return HasSimpleValue ? GetSimpleValueType() : typeof (ClrDynamic);
                         else
                             yield return typeof (string);
                     }
@@ -933,9 +908,9 @@ namespace ClrMD.Extensions
             }
         }
 
-        private IEnumerable<ClrObject> EnumerateArray()
+        private IEnumerable<ClrDynamic> EnumerateArray()
         {
-            foreach (ClrObject clrObject in this)
+            foreach (ClrDynamic clrObject in this)
                 yield return clrObject;
         }
 

@@ -9,7 +9,7 @@ namespace ClrMD.Extensions.Core
     {
         private Dictionary<ulong, ParentList> m_referenceMap;
 
-        public ReferenceMap(IEnumerable<ClrObject> allObjects)
+        public ReferenceMap(IEnumerable<ClrDynamic> allObjects)
         {
             var references = from parent in allObjects
                              from child in parent.EnumerateReferences()
@@ -31,11 +31,11 @@ namespace ClrMD.Extensions.Core
             }
         }
 
-        public IEnumerable<ClrObject> GetReferenceBy(ClrObject o)
+        public IEnumerable<ClrDynamic> GetReferenceBy(ClrDynamic o)
         {
             ParentList parents;
             if (!m_referenceMap.TryGetValue(o.Address, out parents))
-                return new ClrObject[0];
+                return new ClrDynamic[0];
 
             return parents.Start.Enumerate();
         }
@@ -47,16 +47,16 @@ namespace ClrMD.Extensions.Core
 
         private class Node
         {
-            public ClrObject Value;
+            public ClrDynamic Value;
             public Node Next;
 
-            public Node(ClrObject o, Node next)
+            public Node(ClrDynamic o, Node next)
             {
                 Value = o;
                 Next = next;
             }
 
-            public IEnumerable<ClrObject> Enumerate()
+            public IEnumerable<ClrDynamic> Enumerate()
             {
                 Node node = this;
 
