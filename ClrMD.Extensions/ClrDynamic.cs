@@ -128,16 +128,11 @@ namespace ClrMD.Extensions
             return Type == ClrMDSession.Current.ErrorType;
         }
 
-        private static ClrInstanceField FindField(ClrType target, ObfuscatedField oField)
+        private static ClrInstanceField FindField(ObfuscatedField oField)
         {
-            string oFieldType = ClrMDSession.Current.ObfuscateType(oField.OriginalFieldType);
-            var field = target.Fields.FirstOrDefault(f =>
-            {
-                bool nameMatch = string.Equals(f.Name, oField.ObfuscatedName, StringComparison.Ordinal);
-                bool typeMatch = string.Equals(f.Type.Name, oFieldType, StringComparison.Ordinal);
-                return nameMatch && typeMatch;
-            });
-            return field;
+            TypeName delcaringType = ClrMDSession.Current.ObfuscateType(oField.DeclaringType);
+            var target = ClrMDSession.Current.Heap.GetTypeByName(delcaringType);
+            return target.GetFieldByName(oField.ObfuscatedName);
         }
 
         public ClrInstanceField GetField(string fieldName)
@@ -146,20 +141,18 @@ namespace ClrMD.Extensions
             ObfuscatedField obfuscatedField;
 
             if (m_deobfuscator.TryObfuscateField(fieldName, out obfuscatedField))
-                field = FindField(Type, obfuscatedField);
+                field = FindField(obfuscatedField);
 
             string backingFieldName = GetAutomaticPropertyField(fieldName);
 
             if (m_deobfuscator.TryObfuscateField(backingFieldName, out obfuscatedField))
-                field = FindField(Type, obfuscatedField);
+                field = FindField(obfuscatedField);
 
             if (field == null)
                 field = Type.GetFieldByName(fieldName);
 
             if (field == null)
                 field = Type.GetFieldByName(backingFieldName);
-
-
 
             return field;
         }
@@ -169,19 +162,15 @@ namespace ClrMD.Extensions
             return "<" + propertyName + ">" + "k__BackingField";
         }
 
-        public string GetFieldName(string fieldName) => GetFieldName(fieldName, null);
-        public string GetFieldName(string fieldName, ClrType fieldType)
+        public string GetFieldName(string fieldName)
         {
             string deobfuscatedName;
-
-            string typeName = fieldType?.Name;
-            var deObfType = ClrMDSession.Current.DeobfuscateType(typeName);
 
             var obf = m_deobfuscator;
             var target = Type;
             while (obf != null)
             {
-                if (obf.TryDeobfuscateField(fieldName, deObfType, out deobfuscatedName))
+                if (obf.TryDeobfuscateField(fieldName, out deobfuscatedName))
                 {
                     fieldName = deobfuscatedName;
                     break;
@@ -613,7 +602,7 @@ namespace ClrMD.Extensions
 
                     builder.AppendLine();
                     builder.Append(indentation);
-                    builder.Append(GetFieldName(field.Name, field.Type));
+                    builder.Append(GetFieldName(field.Name));
                     builder.Append(": ");
 
                     if (fieldValue.HasSimpleValue || field.Type.IsObjectReference || !includeInteriorFields)
@@ -837,7 +826,7 @@ namespace ClrMD.Extensions
                         yield return "[Visualizer]";
 
                     foreach (var field in Fields)
-                        yield return GetFieldName(field.Name, field.Type);
+                        yield return GetFieldName(field.Name);
                 }
             }
 

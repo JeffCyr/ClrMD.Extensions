@@ -285,6 +285,15 @@ namespace ClrMD.Extensions
             return m_deobfuscator.ObfuscateType(deobfuscatedTypeName);
         }
 
+
+        internal TypeName ObfuscateType(TypeName deobfuscatedTypeName)
+        {
+            if (m_deobfuscator == null)
+                return deobfuscatedTypeName;
+
+            return m_deobfuscator.ObfuscateType(deobfuscatedTypeName);
+        }
+
         public IEnumerable<ClrDynamic> GetReferenceBy(ClrDynamic o)
         {
             return m_referenceMap.GetReferenceBy(o);
