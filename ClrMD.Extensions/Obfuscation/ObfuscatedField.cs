@@ -12,11 +12,11 @@
             return $"{ObfuscatedName} <==>  {OriginalName}   ({DeclaringType})";
         }
 
-        public ObfuscatedField(string obfuscatedName, string originalName, TypeName originalFieldType)
+        public ObfuscatedField(string obfuscatedName, string originalName, TypeName delcaringType)
         {
             ObfuscatedName = obfuscatedName;
             OriginalName = originalName;
-            DeclaringType = originalFieldType;
+            DeclaringType = delcaringType;
         }
     }
 }

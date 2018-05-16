@@ -24,12 +24,12 @@ namespace ClrMD.Extensions.Obfuscation
             m_comparer = StringComparer.Ordinal;
             ObfuscatedName = ((string) typeNode.Element("newname")).Replace('/', '+');
             OriginalName = ((string) typeNode.Element("name")).Replace('/', '+');
+            var declaringType = TypeNameRegex.ParseType(OriginalName);
 
             m_fields = (from fieldNode in typeNode.Elements("fieldlist").Elements("field")
                 let originalName = (string) fieldNode.Element("name")
                 let obfuscatedName = (string) fieldNode.Element("newname")
-                let fieldType = TypeNameRegex.ParseType((string) fieldNode.Element("signature"))
-                select new ObfuscatedField(obfuscatedName, originalName, fieldType)).ToArray();
+                select new ObfuscatedField(obfuscatedName, originalName, declaringType)).ToArray();
 
             m_methods = typeNode.Elements("methodlist").Elements("method").Select(m =>
             {
@@ -136,7 +136,7 @@ namespace ClrMD.Extensions.Obfuscation
                 int i = lo + ((hi - lo) >> 1);
                 ObfuscatedField field = m_fields[i];
 
-                int order = m_comparer.Compare(field.ObfuscatedName + field.DeclaringType, obfuscatedFieldName + ObfuscatedName);
+                int order = m_comparer.Compare(field.ObfuscatedName + field.DeclaringType, obfuscatedFieldName + OriginalName);
 
                 if (order == 0)
                 {
