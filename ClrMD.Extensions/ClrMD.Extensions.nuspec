@@ -2,7 +2,7 @@
 <package>
     <metadata>
         <id>ClrMD.Extensions</id>
-        <version>0.1</version>
+        <version>0.2.0</version>
         <description>Provides multiple ClrMD enhancements including LINQPad integration.</description>
         <authors>JeffCyr</authors>
 		<owners>JeffCyr</owners>
