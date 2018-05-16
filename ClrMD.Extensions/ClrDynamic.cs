@@ -901,7 +901,7 @@ namespace ClrMD.Extensions
             }
             else if (!IsNull() && Type.IsArray)
             {
-                yield return ClrMDSession.Current.DeobfuscateType(m_deobfuscator.ObfuscatedName);  //m_deobfuscator.OriginalName;
+                yield return m_deobfuscator.OriginalName;
                 yield return GetAddressString();
                 yield return ArrayLength;
 
@@ -909,7 +909,7 @@ namespace ClrMD.Extensions
             }
             else
             {
-                yield return ClrMDSession.Current.DeobfuscateType(m_deobfuscator.ObfuscatedName);
+                yield return m_deobfuscator.OriginalName;
                 yield return GetAddressString();
 
                 if (!IsNull())
