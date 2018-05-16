@@ -260,6 +260,15 @@ namespace ClrMD.Extensions
             return m_deobfuscator.GetTypeDeobfuscator(type);
         }
 
+
+        public string DeobfuscateStack(string obfuscatedStackTrace)
+        {
+            if (m_deobfuscator == null)
+                return obfuscatedStackTrace;
+
+            return m_deobfuscator.DeobfuscateCallstack(obfuscatedStackTrace);
+        }
+
         public string DeobfuscateType(string obfuscatedTypeName)
         {
             if (m_deobfuscator == null)
@@ -269,6 +278,15 @@ namespace ClrMD.Extensions
         }
 
         public string ObfuscateType(string deobfuscatedTypeName)
+        {
+            if (m_deobfuscator == null)
+                return deobfuscatedTypeName;
+
+            return m_deobfuscator.ObfuscateType(deobfuscatedTypeName);
+        }
+
+
+        internal TypeName ObfuscateType(TypeName deobfuscatedTypeName)
         {
             if (m_deobfuscator == null)
                 return deobfuscatedTypeName;
