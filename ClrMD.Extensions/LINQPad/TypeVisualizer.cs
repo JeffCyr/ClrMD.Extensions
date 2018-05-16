@@ -74,16 +74,16 @@ namespace ClrMD.Extensions.LINQPad
         {
             public int Count { get; set; }
 
-            public IEnumerable<ClrObject> Items { get; set; }
+            public IEnumerable<ClrDynamic> Items { get; set; }
         }
 
 
-        public override object GetValue(ClrObject o)
+        public override object GetValue(ClrDynamic o)
         {
             int size = (int)o.Dynamic._size;
             int head = (int)o.Dynamic._head;
             int tail = (int)o.Dynamic._tail;
-            var items = o.Dynamic._array as IEnumerable<ClrObject>;
+            var items = o.Dynamic._array as IEnumerable<ClrDynamic>;
 
             if (tail >= head)
             {
@@ -116,7 +116,7 @@ namespace ClrMD.Extensions.LINQPad
         public override object GetValue(ClrDynamic o)
         {
             int size = (int) o.Dynamic._size;
-            var col = o.Dynamic._items as IEnumerable<ClrObject>;
+            var col = o.Dynamic._items as IEnumerable<ClrDynamic>;
             return new ListVisual()
             {
                 Count = size,
