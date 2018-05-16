@@ -130,7 +130,7 @@ namespace ClrMD.Extensions.Obfuscation
                     for (int j = 0; j < args.Length; j++)
                     {
                         string before = args[j].Name;
-                        DeobfuscateType(args[j]);
+                        args[j] = DeobfuscateType(args[j]);
                         if (before == args[j].Name)
                         {
                             if (TypeNameRegex.CouldBeNestedType(args[j].Name))

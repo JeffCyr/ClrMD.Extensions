@@ -38,7 +38,8 @@ namespace ClrMD.Extensions.Obfuscation
                 TypeName returnType = default(TypeName);
                 string prefix;
                 TypeName[] args;
-                if (TypeNameRegex.TryExtractMethodInfo((string) m.Element("signature"), out prefix, out args))
+                string sig = (string) m.Element("signature");
+                if (TypeNameRegex.TryExtractMethodInfo(sig.Replace('/', '+'), out prefix, out args))
                 {
                     if (!string.IsNullOrEmpty(prefix))
                     {
