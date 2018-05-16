@@ -51,7 +51,7 @@ if it can't be found locally.
 The ClrRuntime and ClrHeap are accessible from ClrMDSession's properties.
 
 
-## ClrObject
+## ClrDynamic
 
 In ClrMD, you always access object properties by its ClrType and object address.
 
@@ -65,53 +65,53 @@ foreach (ulong obj in heap.EnumerateObjects())
 }
 ```
 
-`ClrObject` is the object abstraction missing from ClrMD, it allows you to do this
+`ClrDynamic` is a dynamic adapter on top of ClrObject/ClrValueClass defined in ClrMD
 
 ```c#
-foreach (ClrObject obj in session.AllObjects)
+foreach (ClrDynamic obj in session.AllObjects)
 {
     Console.WriteLine("Address:{0} Size:{1} Type:{2}", obj.Address, obj.Size, obj.TypeName);
 }
 ```
 
-`ClrObject` implements DynamicObject, you can access instance fields like this
+`ClrDynamic` implements DynamicObject, you can access instance fields like this
 
 ```c#
 ulong address = 0x12345678;
-ClrObject o = session.Heap.GetClrObject(address);
+ClrDynamic o = session.Heap.GetClrObject(address);
 Console.WriteLine(o.Dynamic._someField);
 
 //You can also use the non-dynamic way
 Console.WriteLine(o["_someField"]);
 
-// Note that the field accessor also returns a ClrObject which can be used to access other inner fields
+// Note that the field accessor also returns a ClrDynamic which can be used to access other inner fields
 // or to cast it into a primitive type.
 ```
 
-If `ClrObject` represent a primitive value (string, byte, int, long, etc), you can directly cast it
+If `ClrDynamic` represent a primitive value (string, byte, int, long, etc), you can directly cast it
 into its primitive type.
 
 ```c#
 // Print all the strings of the Heap
-foreach (ClrObject obj in session.EnumerateClrObjects("System.String"))
+foreach (ClrDynamic obj in session.EnumerateDynamicObjects("System.String"))
 {
     Console.WriteLine((string)obj);
 }
 ```
 
-Arrays are also handled by `ClrObject`.
+Arrays are also handled by `ClrDynamic`.
 
 ```c#
-ClrObject anArray = session.Heap.GetClrObject(0x11223344);
+ClrDynamic anArray = session.Heap.GetDynamicObject(0x11223344);
 
-// You can manipulate the ClrObject like an array
+// You can manipulate the ClrDynamic like an array
 if (anArray.ArrayLength > 0)
     Console.WriteLine(anArray[0]); // Print the object at index 0
 
 // And enumerate all the items
-foreach (ClrObject item in anArray)
+foreach (ClrDynamic item in anArray)
 {
-    // ClrObject.GetDetailedString() will print the object address, type and fields
+    // ClrDynamic.GetDetailedString() will print the object address, type and fields
     Console.WriteLine(item.GetDetailedString());
 }
 ```

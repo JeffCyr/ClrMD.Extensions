@@ -24,8 +24,6 @@ namespace ClrMD.Extensions.LINQPad
             RegisterVisualizer("System.Data.DataRow", new DataRowVisualizer());
             RegisterVisualizer("System.Data.DataTable", new DataTableVisualizer());
             RegisterVisualizer("System.Data.DataSet", new DataSetVisualizer());
-           
-
         }
 
         public static void RegisterVisualizer(string typeName, TypeVisualizer visualizer)
@@ -39,7 +37,7 @@ namespace ClrMD.Extensions.LINQPad
         }
 
 
-        public static TypeVisualizer TryGetVisualizer(ClrObject o)
+        public static TypeVisualizer TryGetVisualizer(ClrDynamic o)
         {
             TypeVisualizer visualizer;
 
@@ -63,13 +61,11 @@ namespace ClrMD.Extensions.LINQPad
                 }
             }
 
-
             return null;
         }
 
-        public abstract object GetValue(ClrObject o);
+        public abstract object GetValue(ClrDynamic o);
     }
-
 
     public class ListVisualizer : TypeVisualizer
     {
@@ -77,10 +73,10 @@ namespace ClrMD.Extensions.LINQPad
         {
             public int Count { get; set; }
 
-            public IEnumerable<ClrObject> Items { get; set; }
+            public IEnumerable<ClrDynamic> Items { get; set; }
         }
 
-        public override object GetValue(ClrObject o)
+        public override object GetValue(ClrDynamic o)
         {
             return new ListVisual()
             {
@@ -95,17 +91,17 @@ namespace ClrMD.Extensions.LINQPad
         public class DictionaryVisual
         {
             public int Count { get; set; }
-            public IEnumerable<KeyValuePair<ClrObject, ClrObject>> Items { get; set; }
+            public IEnumerable<KeyValuePair<ClrDynamic, ClrDynamic>> Items { get; set; }
         }
         
-        public override object GetValue(ClrObject o)
+        public override object GetValue(ClrDynamic o)
         {
             return new DictionaryVisual
             {
                 Count = (int)o.Dynamic.count - (int)o.Dynamic.freeCount,
                 Items = from entry in o["entries"]
                         where (int)entry["hashCode"] > 0
-                        select new KeyValuePair<ClrObject, ClrObject>(entry["key"], entry["value"])
+                        select new KeyValuePair<ClrDynamic, ClrDynamic>(entry["key"], entry["value"])
             };
         }
     }
@@ -114,12 +110,12 @@ namespace ClrMD.Extensions.LINQPad
     {
         public class DataRowVisual : ICustomMemberProvider
         {
-            private readonly List<ClrObject> m_columns;
+            private readonly List<ClrDynamic> m_columns;
             private readonly int m_record;
 
-            public ClrObject Row { get; private set; }
+            public ClrDynamic Row { get; private set; }
 
-            public ClrObject this[string columnName]
+            public ClrDynamic this[string columnName]
             {
                 get
                 {
@@ -128,13 +124,13 @@ namespace ClrMD.Extensions.LINQPad
                     if (column == null)
                         return null;
 
-                    return (ClrObject)column.Dynamic._storage.values[m_record];
+                    return (ClrDynamic)column.Dynamic._storage.values[m_record];
                 }
             }
 
             public DataRowState RowState { get; private set; }
 
-            public DataRowVisual(ClrObject row)
+            public DataRowVisual(ClrDynamic row)
             {
                 Row = row;
 
@@ -145,7 +141,7 @@ namespace ClrMD.Extensions.LINQPad
                 RowState = GetRowState(newRecord, oldRecord);
                 m_record = GetRecord(tempRecord, newRecord, oldRecord);
 
-                m_columns = (from column in (ClrObject)row.Dynamic._columns._list._items
+                m_columns = (from column in (ClrDynamic)row.Dynamic._columns._list._items
                              where !column.IsNull()
                              select column).ToList();
             }
@@ -170,9 +166,9 @@ namespace ClrMD.Extensions.LINQPad
             {
                 yield return RowState;
 
-                foreach (ClrObject column in m_columns)
+                foreach (ClrDynamic column in m_columns)
                 {
-                    var value = (ClrObject)column.Dynamic._storage.values[m_record];
+                    var value = (ClrDynamic)column.Dynamic._storage.values[m_record];
 
                     yield return value.HasSimpleValue ? value.SimpleValue : value;
                 }
@@ -211,7 +207,7 @@ namespace ClrMD.Extensions.LINQPad
             }
         }
 
-        public override object GetValue(ClrObject o)
+        public override object GetValue(ClrDynamic o)
         {
             return new DataRowVisual(o);
         }
@@ -221,14 +217,14 @@ namespace ClrMD.Extensions.LINQPad
     {
         public class DataTableVisual : IEnumerable<DataRowVisualizer.DataRowVisual>
         {
-            private readonly ClrObject m_table;
+            private readonly ClrDynamic m_table;
 
             public string Name
             {
                 get { return (string)m_table["tableName"]; }
             }
 
-            public DataTableVisual(ClrObject table)
+            public DataTableVisual(ClrDynamic table)
             {
                 m_table = table;
             }
@@ -249,20 +245,20 @@ namespace ClrMD.Extensions.LINQPad
             }
         }
 
-        internal class RBTreeEnumerator : IEnumerator<ClrObject>
+        internal class RBTreeEnumerator : IEnumerator<ClrDynamic>
         {
             private const int NIL = 0;
-            private readonly ClrObject m_tree;
+            private readonly ClrDynamic m_tree;
             private int m_index;
             private int m_mainTreeNodeId;
-            private ClrObject m_current;
+            private ClrDynamic m_current;
 
             private dynamic Tree
             {
                 get { return m_tree; }
             }
  
-            internal RBTreeEnumerator(ClrObject tree)
+            internal RBTreeEnumerator(ClrDynamic tree)
             {
                 m_tree = tree;
                 m_index = NIL;
@@ -360,7 +356,7 @@ namespace ClrMD.Extensions.LINQPad
                 return (int)(Tree._pageTable[nodeId >> 16].Slots[nodeId & 0xFFFF].nextId);
             }
 
-            private ClrObject Key(int nodeId)
+            private ClrDynamic Key(int nodeId)
             {
                 return (Tree._pageTable[nodeId >> 16].Slots[nodeId & 0xFFFF].keyOfNode);
             }
@@ -372,7 +368,7 @@ namespace ClrMD.Extensions.LINQPad
                 m_current = null;
             }
 
-            public ClrObject Current
+            public ClrDynamic Current
             {
                 get { return m_current; }
             }
@@ -383,7 +379,7 @@ namespace ClrMD.Extensions.LINQPad
             }
         }
 
-        public override object GetValue(ClrObject o)
+        public override object GetValue(ClrDynamic o)
         {
             return new DataTableVisual(o);
         }
@@ -393,16 +389,16 @@ namespace ClrMD.Extensions.LINQPad
     {
         public class DataSetVisual : ICustomMemberProvider
         {
-            private readonly List<ClrObject> m_tables;
+            private readonly List<ClrDynamic> m_tables;
 
             public IEnumerable<DataTableVisualizer.DataTableVisual> DataTables
             {
                 get { return m_tables.Select(table => new DataTableVisualizer.DataTableVisual(table)); }
             }
 
-            public DataSetVisual(ClrObject dataset)
+            public DataSetVisual(ClrDynamic dataset)
             {
-                m_tables = (from table in (ClrObject)dataset.Dynamic.tableCollection._list._items
+                m_tables = (from table in (ClrDynamic)dataset.Dynamic.tableCollection._list._items
                             where !table.IsNull()
                             orderby (string)table["tableName"]
                             select table).ToList();
@@ -424,7 +420,7 @@ namespace ClrMD.Extensions.LINQPad
             }
         }
 
-        public override object GetValue(ClrObject o)
+        public override object GetValue(ClrDynamic o)
         {
             return new DataSetVisual(o);
         }

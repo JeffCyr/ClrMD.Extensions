@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
 using ClrMD.Extensions.Core;
@@ -18,39 +18,42 @@ namespace ClrMD.Extensions
         private static string s_lastDumpPath;
         private static int? s_lastProcessId;
 
-        public static ClrMDSession Current
-        {
-            get { return s_currentSession; }
-        }
-
-        private Lazy<List<ClrObject>> m_allObjects;
+        private Lazy<List<ClrDynamic>> m_allObjects;
         private ReferenceMap m_referenceMap;
         private Deobfuscator m_deobfuscator;
 
-        public DataTarget Target { get; private set; }
-        public ClrRuntime Runtime { get; private set; }
-        public ClrHeap Heap { get; private set; }
+        public static ClrMDSession Current => s_currentSession;
 
-        public IEnumerable<ClrObject> AllObjects
-        {
-            get { return m_allObjects.Value; }
-        }
+        public DataTarget Target { get; }
+        public ClrRuntime Runtime { get; }
+        public ClrHeap Heap { get; }
+
+        public IEnumerable<ClrDynamic> AllObjects => m_allObjects.Value;
 
         public bool IsReferenceMappingCreated { get; private set; }
 
-        private ClrMDSession(DataTarget target, string dacFile)
-            : this(target, target.CreateRuntime(dacFile))
-        { }
+        internal ClrType ErrorType { get; private set; }
 
-        public ClrMDSession(DataTarget target, ClrRuntime runtime)
+        private ClrMDSession(DataTarget target, string dacFile)
         {
             ClrMDSession.Detach();
 
-            Target = target;
-            Runtime = runtime;
-            Heap = Runtime.GetHeap();
+            if (target.ClrVersions.Count == 0)
+                throw new ArgumentException("DataTarget has no clr loaded.", nameof(target));
 
-            m_allObjects = new Lazy<List<ClrObject>>(() => Heap.EnumerateClrObjects().ToList());
+            Target = target;
+            Runtime = dacFile == null ? target.ClrVersions[0].CreateRuntime() : target.ClrVersions[0].CreateRuntime(dacFile);
+            Heap = Runtime.Heap;
+
+            //Temp hack until ErrorType is made public
+            var property = Heap.GetType().GetProperty("ErrorType", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            if (property == null)
+                throw new InvalidOperationException("Unable to find 'ErrorType' property on ClrHeap.");
+
+            ErrorType = (ClrType)property.GetValue(Heap);
+
+            m_allObjects = new Lazy<List<ClrDynamic>>(() => Heap.EnumerateDynamicObjects().ToList());
 
             s_currentSession = this;
         }
@@ -78,17 +81,6 @@ namespace ClrMD.Extensions
                     target.Architecture == Architecture.Amd64 && !Environment.Is64BitProcess)
                 {
                     throw new InvalidOperationException("Mismatched architecture between this process and the target dump.");
-                }
-
-                if (dacFile == null)
-                    dacFile = target.ClrVersions[0].TryGetDacLocation();
-
-                if (string.IsNullOrEmpty(dacFile))
-                {
-                    using (var locator = DacLocator.FromPublicSymbolServer("Symbols"))
-                    {
-                        dacFile = locator.FindDac(target.ClrVersions[0]);
-                    }
                 }
             }
             catch
@@ -142,37 +134,90 @@ namespace ClrMD.Extensions
             Detach();
 
             DataTarget target = DataTarget.AttachToProcess(p.Id, millisecondsTimeout, attachFlag);
-            string dacFile;
-
-            try
-            {
-                dacFile = target.ClrVersions[0].TryGetDacLocation();
-
-                if (dacFile == null)
-                    throw new InvalidOperationException("Unable to find dac file. This may be caused by mismatched architecture between this process and the target process.");
-            }
-            catch
-            {
-                target.Dispose();
-                throw;
-            }
-            
-
             s_lastProcessId = p.Id;
-            return new ClrMDSession(target, dacFile);
+            return new ClrMDSession(target, null);
         }
 
-        public IEnumerable<ClrObject> EnumerateClrObjects(string typeName)
+        public static ClrMDSession AttachWithSnapshot(string processName)
         {
-            if (typeName.Contains("*"))
-            {
-                var regex = new Regex($"^{Regex.Escape(typeName).Replace("\\*", ".*")}$",
-                    RegexOptions.Compiled | RegexOptions.IgnoreCase);
+            Process p = Process.GetProcessesByName(processName).FirstOrDefault();
 
-                return AllObjects.Where(item => regex.IsMatch(item.TypeName));
+            if (p == null)
+                throw new ArgumentException("Process not found", "processName");
+
+            return AttachWithSnapshot(p);
+        }
+
+        public static ClrMDSession AttachWithSnapshot(int pid)
+        {
+            Process p = Process.GetProcessById(pid);
+
+            if (p == null)
+                throw new ArgumentException("Process not found", "pid");
+
+            return AttachWithSnapshot(p);
+        }
+
+        public static ClrMDSession AttachWithSnapshot(Process p)
+        {
+            if (s_currentSession != null && s_lastProcessId == p.Id)
+            {
+                TestInvalidComObjectException();
+                return s_currentSession;
             }
 
-            return AllObjects.Where(item => item.TypeName == typeName);
+            Detach();
+
+            DataTarget target = DataTarget.CreateSnapshotAndAttach(p.Id);
+            s_lastProcessId = p.Id;
+            return new ClrMDSession(target, null);
+        }
+
+        public IEnumerable<ClrDynamic> EnumerateDynamicObjects(ClrType type)
+        {
+            return AllObjects.Where(item => item.Type == type);
+        }
+
+        public IEnumerable<ClrDynamic> EnumerateDynamicObjects(string typeName)
+        {
+            if (!typeName.Contains("*"))
+                return AllObjects.Where(item => item.TypeName == typeName);
+
+            var regex = new Regex($"^{Regex.Escape(typeName).Replace("\\*", ".*")}$",
+                RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+            var types = 
+                from type in Heap.EnumerateTypes()
+                let deobfuscator = GetTypeDeobfuscator(type)
+                where regex.IsMatch(deobfuscator.OriginalName)
+                select type;
+
+            var typeSet = new HashSet<ClrType>(types);
+
+            return AllObjects.Where(o => typeSet.Contains(o.Type));
+        }
+
+        public IEnumerable<ClrDynamic> EnumerateDynamicObjects(params ClrType[] types)
+        {
+            return EnumerateDynamicObjects((IEnumerable<ClrType>)types);
+        }
+
+        public IEnumerable<ClrDynamic> EnumerateDynamicObjects(IEnumerable<ClrType> types)
+        {
+            if (types == null)
+                return EnumerateDynamicObjects();
+
+            IList<ClrType> castedTypes = types as IList<ClrType> ?? types.ToList();
+
+            if (castedTypes.Count == 0)
+                return EnumerateDynamicObjects();
+
+            if (castedTypes.Count == 1)
+                return EnumerateDynamicObjects(castedTypes[0]);
+
+            HashSet<ClrType> set = new HashSet<ClrType>(castedTypes);
+
+            return AllObjects.Where(o => set.Contains(o.Type));
         }
 
         public void CreateReferenceMapping()
@@ -195,7 +240,7 @@ namespace ClrMD.Extensions
             if (m_deobfuscator != null && m_deobfuscator.RenamingMapPath.Equals(renamingMapFilePath, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            m_allObjects = new Lazy<List<ClrObject>>(() => Heap.EnumerateClrObjects().ToList());
+            m_allObjects = new Lazy<List<ClrDynamic>>(() => Heap.EnumerateDynamicObjects().ToList());
             m_deobfuscator = new Deobfuscator(renamingMapFilePath);
         }
 
@@ -231,7 +276,7 @@ namespace ClrMD.Extensions
             return m_deobfuscator.ObfuscateType(deobfuscatedTypeName);
         }
 
-        public IEnumerable<ClrObject> GetReferenceBy(ClrObject o)
+        public IEnumerable<ClrDynamic> GetReferenceBy(ClrDynamic o)
         {
             return m_referenceMap.GetReferenceBy(o);
         }
@@ -271,7 +316,7 @@ namespace ClrMD.Extensions
                     int bytesRead;
                     s_currentSession.Runtime.ReadMemory(0, dummy, 8, out bytesRead);
                 }
-                catch (InvalidComObjectException ex)
+                catch (System.Runtime.InteropServices.InvalidComObjectException ex)
                 {
                     const string msg = @"It looks like ClrMDSession was created from another STA Thread. 
 If you are using LINQPad, change this setting: 
