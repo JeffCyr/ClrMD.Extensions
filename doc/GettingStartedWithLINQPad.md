@@ -19,12 +19,10 @@ If you don’t use the corresponding architecture, you will get this error:
 
 ## Add ClrMD references & namespaces
 
-`ClrMD.Extensions` is not yet available on NuGet, the most convenient way to use it now would be to clone/download the
-repository, compile and add the references directly from the bin folder.
+`ClrMD.Extensions` is now  available on nuget.org.
 
-In "Query properties", add the references
-- Microsoft.Diagnostics.Runtime.dll
-- ClrMD.Extensions.dll
+In "Query properties", add the nuget package
+- ClrMD.Extensions
 
 Include these namespaces in the “Additional Namespace Imports” tab:
 - ClrMD.Extensions
