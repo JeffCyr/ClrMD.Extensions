@@ -28,7 +28,7 @@ public static class LocalExtensions
     public static void DumpThreads(this ClrMDSession session, bool includeThreadName = true)
     {
         // Get the thread names from the 'Thread' instances of the heap.
-        var threadsInfo = from o in session.EnumerateClrObjects("System.Threading.Thread")
+        var threadsInfo = from o in session.EnumerateDynamicObjects("System.Threading.Thread")
                           select new
                           {
                               ManagedThreadId = (int)o.Dynamic.m_ManagedThreadId,
