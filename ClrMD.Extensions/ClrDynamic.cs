@@ -195,6 +195,12 @@ namespace ClrMD.Extensions
             return fieldName;
         }
 
+        private IEnumerable<ClrDynamic> LazyEnumerateReferenceBy()
+        {
+            foreach (var o in EnumerateReferenceBy())
+                yield return o;
+        }
+
         public IEnumerable<ClrDynamic> EnumerateReferenceBy()
         {
             IEnumerable<ClrDynamic> allObjects;
@@ -203,7 +209,7 @@ namespace ClrMD.Extensions
             {
                 if (ClrMDSession.Current.IsReferenceMappingCreated)
                     return ClrMDSession.Current.GetReferenceBy(this);
-                
+
                 allObjects = ClrMDSession.Current.AllObjects;
             }
             else
@@ -930,7 +936,7 @@ namespace ClrMD.Extensions
 
             if (LinqPadExtensions.DisplayReferencedByField && Type.IsObjectReference)
             {
-                yield return EnumerateReferenceBy().Select(item => new { Type = item.m_deobfuscator.OriginalName, Object = item });
+                yield return LazyEnumerateReferenceBy().Select(item => new { Type = item.m_deobfuscator.OriginalName, Object = item });
             }
         }
 
