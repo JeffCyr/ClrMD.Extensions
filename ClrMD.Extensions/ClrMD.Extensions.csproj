@@ -52,6 +52,7 @@
     <Compile Include="ClrMDExtensions.cs" />
     <Compile Include="ClrMDSession.cs" />
     <Compile Include="ClrDynamic.cs" />
+    <Compile Include="Core\ReadOnlySegmentedCollection.cs" />
     <Compile Include="LINQPad\ICustomMemberProvider.cs" />
     <Compile Include="LINQPad\LinqPadExtensions.cs" />
     <Compile Include="Obfuscation\Deobfuscator.cs" />
