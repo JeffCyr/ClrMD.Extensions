@@ -18,7 +18,7 @@ namespace ClrMD.Extensions
         private static string s_lastDumpPath;
         private static int? s_lastProcessId;
 
-        private Lazy<List<ClrDynamic>> m_allObjects;
+        private Lazy<ReadOnlySegmentedCollection<ClrDynamic>> m_allObjects;
         private ReferenceMap m_referenceMap;
         private Deobfuscator m_deobfuscator;
 
@@ -53,9 +53,14 @@ namespace ClrMD.Extensions
 
             ErrorType = (ClrType)property.GetValue(Heap);
 
-            m_allObjects = new Lazy<List<ClrDynamic>>(() => Heap.EnumerateDynamicObjects().ToList());
+            m_allObjects = CreateLazyAllObjects();
 
             s_currentSession = this;
+        }
+
+        private Lazy<ReadOnlySegmentedCollection<ClrDynamic>> CreateLazyAllObjects()
+        {
+            return new Lazy<ReadOnlySegmentedCollection<ClrDynamic>>(() => new ReadOnlySegmentedCollection<ClrDynamic>(Heap.EnumerateDynamicObjects()));
         }
 
         public static ClrMDSession LoadCrashDump(string dumpPath, string dacFile = null)
@@ -240,7 +245,9 @@ namespace ClrMD.Extensions
             if (m_deobfuscator != null && m_deobfuscator.RenamingMapPath.Equals(renamingMapFilePath, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            m_allObjects = new Lazy<List<ClrDynamic>>(() => Heap.EnumerateDynamicObjects().ToList());
+            if (m_allObjects.IsValueCreated)
+                m_allObjects = CreateLazyAllObjects();
+
             m_deobfuscator = new Deobfuscator(renamingMapFilePath);
         }
 
