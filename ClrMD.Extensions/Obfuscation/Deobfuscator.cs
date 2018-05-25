@@ -10,10 +10,54 @@ using Microsoft.Diagnostics.Runtime;
 
 namespace ClrMD.Extensions.Obfuscation
 {
+    internal sealed class TypeKey : IEquatable<TypeKey>
+    {
+        public string ModuleName { get; }
+        public string TypeName { get; }
+
+        public TypeKey(string moduleName, string typeName)
+        {
+            ModuleName = moduleName;
+            TypeName = typeName;
+        }
+
+        public bool Equals(TypeKey other)
+        {
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return string.Equals(ModuleName, other.ModuleName) && string.Equals(TypeName, other.TypeName);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            return obj is TypeKey && Equals((TypeKey)obj);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                return ((ModuleName != null ? ModuleName.GetHashCode() : 0) * 397) ^ (TypeName != null ? TypeName.GetHashCode() : 0);
+            }
+        }
+
+        public static bool operator ==(TypeKey left, TypeKey right)
+        {
+            return Equals(left, right);
+        }
+
+        public static bool operator !=(TypeKey left, TypeKey right)
+        {
+            return !Equals(left, right);
+        }
+    }
+
     public class Deobfuscator
     {
         // (ModuleName, TypeName) -> TypeDeobfuscator
-        private readonly Dictionary<(string, string), ITypeDeobfuscator> m_obfuscationMap;
+        private readonly Dictionary<TypeKey, ITypeDeobfuscator> m_obfuscationMap;
 
         private readonly Dictionary<ClrType, ITypeDeobfuscator> m_typeLookup;
 
@@ -30,7 +74,7 @@ namespace ClrMD.Extensions.Obfuscation
                          where obfuscatedTypeName != null
                          select new
                                 {
-                                    TypeKey = ((string)moduleNode.Element("name"), obfuscatedTypeName.Replace("/", "+")),
+                                    TypeKey = new TypeKey((string)moduleNode.Element("name"), obfuscatedTypeName.Replace("/", "+")),
                                     TypeNode = typeNode
                                 }).ToDictionary(item => item.TypeKey, item => (ITypeDeobfuscator)new TypeDeobfuscator(item.TypeNode));
 
@@ -40,7 +84,7 @@ namespace ClrMD.Extensions.Obfuscation
         public ITypeDeobfuscator GetTypeDeobfuscator(string typeName)
         {
             return (from item in m_obfuscationMap
-                    where item.Key.Item2 == typeName
+                    where item.Key.TypeName == typeName
                     select item.Value).FirstOrDefault() ?? DummyTypeDeobfuscator.GetDeobfuscator(typeName);
         }
 
@@ -54,7 +98,7 @@ namespace ClrMD.Extensions.Obfuscation
             if (type.Module != null && type.Module.IsFile)
             {
                 string moduleName = Path.GetFileName(type.Module.FileName);
-                var key = (moduleName, type.Name);
+                var key = new TypeKey(moduleName, type.Name);
 
                 m_obfuscationMap.TryGetValue(key, out result);
             }
