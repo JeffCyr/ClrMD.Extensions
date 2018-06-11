@@ -15,7 +15,6 @@
     <copyright>Copyright © Jeff Cyr</copyright>
     <tags>clrmd</tags>
     <dependencies>
-      <dependency id="System.ValueTuple" version="4.4.0" />
       <dependency id="Microsoft.Diagnostics.Runtime" version="[0.9.180305.1]" />
     </dependencies>
   </metadata>
