@@ -1,19 +1,22 @@
 <?xml version="1.0"?>
 <package>
-    <metadata>
-        <id>ClrMD.Extensions</id>
-        <version>0.2.0</version>
-        <description>Provides multiple ClrMD enhancements including LINQPad integration.</description>
-        <authors>JeffCyr</authors>
-		<owners>JeffCyr</owners>
-		<title>ClrMD.Extensions (LINQ to Memory Dump)</title>
-		<projectUrl>https://github.com/JeffCyr/ClrMD.Extensions</projectUrl>
-		<licenseUrl>https://github.com/JeffCyr/ClrMD.Extensions/blob/master/LICENSE</licenseUrl>
-		<copyright>Copyright © Jeff Cyr</copyright>
-		<tags>clrmd</tags>
-		<dependencies>
-			<dependency id="System.ValueTuple" version="4.4.0" />
-			<dependency id="Microsoft.Diagnostics.Runtime" version="[0.9.180305.1]" />
-		</dependencies>
-    </metadata>
+  <metadata>
+    <id>ClrMD.Extensions</id>
+    <version>0.3.0</version>
+    <description>Provides multiple ClrMD enhancements including LINQPad integration.</description>
+    <authors>JeffCyr</authors>
+    <owners>JeffCyr</owners>
+    <title>ClrMD.Extensions (LINQ to Memory Dump)</title>
+    <releaseNotes>
+      - Fixed issue when having 100+ millions objects in a dump
+    </releaseNotes>
+    <projectUrl>https://github.com/JeffCyr/ClrMD.Extensions</projectUrl>
+    <licenseUrl>https://github.com/JeffCyr/ClrMD.Extensions/blob/master/LICENSE</licenseUrl>
+    <copyright>Copyright © Jeff Cyr</copyright>
+    <tags>clrmd</tags>
+    <dependencies>
+      <dependency id="System.ValueTuple" version="4.4.0" />
+      <dependency id="Microsoft.Diagnostics.Runtime" version="[0.9.180305.1]" />
+    </dependencies>
+  </metadata>
 </package>
