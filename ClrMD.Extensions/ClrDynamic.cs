@@ -82,7 +82,7 @@ namespace ClrMD.Extensions
             }
         }
 
-        public bool HasSimpleValue => SimpleValueHelper.IsSimpleValue(Type);
+        public bool HasSimpleValue => IsNull() || SimpleValueHelper.IsSimpleValue(Type);
 
         public object SimpleValue => SimpleValueHelper.GetSimpleValue(this);
 
@@ -92,7 +92,7 @@ namespace ClrMD.Extensions
             {
                 if (Type.IsEnum)
                     return Type.GetEnumName(SimpleValue) ?? SimpleValue.ToString();
-                return SimpleValue;
+                return SimpleValue ?? "{null}";
             }
         }
 
@@ -572,7 +572,7 @@ namespace ClrMD.Extensions
         private string GetAddressString()
         {
             if (Address == NullAddress)
-                return "null";
+                return "{null}";
             
             return "0x" + Address.ToString("X");
         }
@@ -701,7 +701,7 @@ namespace ClrMD.Extensions
                 object value = obj.SimpleValue;
 
                 if (value == null)
-                    return "null";
+                    return "{null}";
 
                 ClrType type = obj.Type;
                 if (type != null && type.IsEnum)
@@ -810,11 +810,13 @@ namespace ClrMD.Extensions
 
         public IEnumerable<string> GetNames()
         {
-            if (HasSimpleValue || IsUndefined())
+            if (IsNull() || HasSimpleValue || IsUndefined())
             {
                 yield return "";
+                yield break;
             }
-            else if (Type.IsArray)
+            
+            if (Type.IsArray)
             {
                 yield return "[Type]";
                 yield return "[Address]";
@@ -826,14 +828,11 @@ namespace ClrMD.Extensions
                 yield return "[Type]";
                 yield return "[Address]";
 
-                if (!IsNull())
-                {
-                    if (Visualizer != null)
-                        yield return "[Visualizer]";
+                if (Visualizer != null)
+                    yield return "[Visualizer]";
 
-                    foreach (var field in Fields)
-                        yield return GetFieldName(field.Name);
-                }
+                foreach (var field in Fields)
+                    yield return GetFieldName(field.Name);
             }
 
             if (LinqPadExtensions.DisplayReferencedByField && Type.IsObjectReference)
@@ -844,15 +843,25 @@ namespace ClrMD.Extensions
 
         public IEnumerable<Type> GetTypes()
         {
+            if (IsUndefined())
+            {
+                yield return typeof(string);
+                yield break;
+            }
+
+            if (IsNull())
+            {
+                yield return typeof(object);
+                yield break;
+            }
+
             if (HasSimpleValue)
             {
                  yield return GetSimpleValueType();
+                yield break;
             }
-            else if (IsUndefined())
-            {
-                yield return typeof(string);
-            }
-            else if (Type.IsArray)
+            
+            if (Type.IsArray)
             {
                 // Type Name
                 yield return typeof(string);
@@ -874,17 +883,19 @@ namespace ClrMD.Extensions
                 // Address
                 yield return typeof(string);
 
-                if (!IsNull())
-                {
-                    if (Visualizer != null)
-                        yield return typeof(object);
+                if (Visualizer != null)
+                    yield return typeof(object);
 
-                    for (int i = 0; i < Type.Fields.Count; ++i)
+                foreach (ClrInstanceField field in Type.Fields)
+                {
+                    if (LinqPadExtensions.SmartNavigation)
                     {
-                        if (LinqPadExtensions.SmartNavigation)
-                            yield return HasSimpleValue ? GetSimpleValueType() : typeof (ClrDynamic);
-                        else
-                            yield return typeof (string);
+                        ClrDynamic fieldValue = this[field];
+                        yield return fieldValue.HasSimpleValue ? fieldValue.GetSimpleValueType() : typeof(ClrDynamic);
+                    }
+                    else
+                    {
+                        yield return typeof(string);
                     }
                 }
             }
@@ -900,12 +911,22 @@ namespace ClrMD.Extensions
             if (IsUndefined())
             {
                 yield return ToString();
+                yield break;
             }
-            else if (!IsNull() && HasSimpleValue)
+
+            if (IsNull())
+            {
+                yield return null;
+                yield break;
+            }
+
+            if (HasSimpleValue)
             {
                 yield return SimpleDisplayValue;
+                yield break;
             }
-            else if (!IsNull() && Type.IsArray)
+            
+            if (Type.IsArray)
             {
                 yield return m_deobfuscator.OriginalName;
                 yield return GetAddressString();
@@ -918,19 +939,20 @@ namespace ClrMD.Extensions
                 yield return m_deobfuscator.OriginalName;
                 yield return GetAddressString();
 
-                if (!IsNull())
-                {
-                    var visual = Visualizer;
-                    if (visual != null)
-                        yield return visual;
+                var visual = Visualizer;
+                if (visual != null)
+                    yield return visual;
 
-                    foreach (ClrInstanceField field in Type.Fields)
-                    {
-                        if (LinqPadExtensions.SmartNavigation)
-                            yield return (!this[field].IsNull() && this[field].HasSimpleValue) ? this[field].SimpleDisplayValue : this[field];
-                        else
-                            yield return this[field].ToString();
-                    }
+                foreach (ClrInstanceField field in Type.Fields)
+                {
+                    var fieldValue = this[field];
+
+                    if (fieldValue.IsNull())
+                        yield return null;
+                    else if (LinqPadExtensions.SmartNavigation)
+                        yield return this[field].HasSimpleValue ? this[field].SimpleDisplayValue : this[field];
+                    else
+                        yield return this[field].ToString();
                 }
             }
 
