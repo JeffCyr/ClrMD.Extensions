@@ -7,7 +7,7 @@ namespace ClrMD.Extensions.Obfuscation
 {
     internal static class TypeNameRegex
     {
-        private const string TypeDefRegex = @"(?<typeDeclaration>\w[\w\.\d\+`]*(?<genericArgs><[^<>]*(((?<Open><)[^<>]*)+((?<Close-Open>>)[^<>]*)+)*(?(Open)(?!))>)?)";
+        private const string TypeDefRegex = @"(?<typeDeclaration>\w[\w\.\d\+`]*(?<genericArgs><[^<>]*(((?<Open><)[^<>]*)+((?<Close-Open>>)[^<>]*)+)*(?(Open)(?!))>)?(?<array>\[\])?)";
         private static readonly Regex s_typeRegex = new Regex(TypeDefRegex, RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex s_argumentListRegex = new Regex($"{TypeDefRegex},?", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex s_callstackLineRegex = new Regex(@"\w[\w\.\d\+<>`]*\((?<args>.*)\)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -49,15 +49,21 @@ namespace ClrMD.Extensions.Obfuscation
                 string completeName = match.Value;
                 string typeName = completeName;
                 var genericArgs = match.Groups["genericArgs"];
+                bool isArray =  match.Groups["array"]?.Success == true;
                 if (genericArgs != null && genericArgs.Success)
                 {
                     typeName = completeName.Substring(0, genericArgs.Index - match.Index);
                     var args = match.Groups["genericArgs"].Value;
                     args = args.Substring(1, args.Length - 2);
-                    return new TypeName(SanitizeType(typeName), ParseArgList(args).ToArray());
+                    return new TypeName(SanitizeType(typeName), isArray, ParseArgList(args).ToArray());
                 }
 
-                return new TypeName(SanitizeType(typeName));
+                if (isArray)
+                {
+                    typeName = typeName.Substring(0, typeName.Length-2);
+                }
+
+                return new TypeName(SanitizeType(typeName), isArray);
             }
             return new TypeName(input);
         }
