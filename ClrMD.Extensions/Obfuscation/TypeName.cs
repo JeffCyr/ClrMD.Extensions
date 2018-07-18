@@ -8,33 +8,33 @@ namespace ClrMD.Extensions.Obfuscation
 
         public string Name { get; }
 
-        public bool IsArray { get; }
+        public string ArrayDefinition{ get; }
 
         public IReadOnlyList<TypeName> GenericArgs => m_genericArgs;
 
         public TypeName(string name) : this()
         {
             Name = name;
-            IsArray = false;
+            ArrayDefinition = null;
         }
 
         public TypeName(string name, params TypeName[] genericArgs)
         {
             Name = name;
-            IsArray = false;
+            ArrayDefinition = null;
             m_genericArgs = genericArgs;
         }
 
-        public TypeName(string name, bool array) : this()
+        public TypeName(string name, string array) : this()
         {
             Name = name;
-            IsArray = array;
+            ArrayDefinition = array;
         }
 
-        public TypeName(string name, bool array, params TypeName[] genericArgs)
+        public TypeName(string name, string array, params TypeName[] genericArgs)
         {
             Name = name;
-            IsArray = array;
+            ArrayDefinition = array;
             m_genericArgs = genericArgs;
         }
 
@@ -50,9 +50,9 @@ namespace ClrMD.Extensions.Obfuscation
                 s = $"{Name}<{string.Join(",", GenericArgs)}>";
             }
 
-            if (IsArray)
+            if (ArrayDefinition != null)
             {
-                s += "[]";
+                s += ArrayDefinition;
             }
             return s;
         }
