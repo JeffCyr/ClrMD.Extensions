@@ -7,7 +7,7 @@ namespace ClrMD.Extensions.Obfuscation
 {
     internal static class TypeNameRegex
     {
-        private const string TypeDefRegex = @"(?<typeDeclaration>\w[\w\.\d\+`]*(?<genericArgs><[^<>]*(((?<Open><)[^<>]*)+((?<Close-Open>>)[^<>]*)+)*(?(Open)(?!))>)?)";
+        private const string TypeDefRegex = @"(?<typeDeclaration>\w[\w\.\d\+`]*(?<genericArgs><[^<>]*(((?<Open><)[^<>]*)+((?<Close-Open>>)[^<>]*)+)*(?(Open)(?!))>)?(?<array>(?:\[,*\])+)*)";
         private static readonly Regex s_typeRegex = new Regex(TypeDefRegex, RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex s_argumentListRegex = new Regex($"{TypeDefRegex},?", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex s_callstackLineRegex = new Regex(@"\w[\w\.\d\+<>`]*\((?<args>.*)\)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -40,7 +40,6 @@ namespace ClrMD.Extensions.Obfuscation
                 }
             }
         }
-
         public static TypeName ParseType(string input)
         {
             var match = s_typeRegex.Match(input);
@@ -49,18 +48,30 @@ namespace ClrMD.Extensions.Obfuscation
                 string completeName = match.Value;
                 string typeName = completeName;
                 var genericArgs = match.Groups["genericArgs"];
+                string array = null;
+                var arrayGroup = match.Groups["array"];
+                if (arrayGroup?.Success == true)
+                {
+                    array = arrayGroup.Value;
+                }
                 if (genericArgs != null && genericArgs.Success)
                 {
                     typeName = completeName.Substring(0, genericArgs.Index - match.Index);
                     var args = match.Groups["genericArgs"].Value;
                     args = args.Substring(1, args.Length - 2);
-                    return new TypeName(SanitizeType(typeName), ParseArgList(args).ToArray());
+                    return new TypeName(SanitizeType(typeName), array, ParseArgList(args).ToArray());
                 }
 
-                return new TypeName(SanitizeType(typeName));
+                if (array != null)
+                {
+                    typeName = typeName.Substring(0, typeName.Length - array.Length);
+                }
+
+                return new TypeName(SanitizeType(typeName), array);
             }
             return new TypeName(input);
         }
+
      
         public static bool CouldBeNestedType(string input)
         {
