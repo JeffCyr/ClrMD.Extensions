@@ -230,11 +230,10 @@ namespace ClrMD.Extensions.Obfuscation
         public string DeobfuscateType(string obfuscatedTypeName)
         {
             var typeName = TypeNameRegex.ParseType(obfuscatedTypeName);
+            
             if (typeName.Name != null)
-            {
-                DeobfuscateType(typeName);
-                return typeName.ToString();
-            }
+                return DeobfuscateType(typeName).ToString();
+
             return obfuscatedTypeName;
         }
     }
