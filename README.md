@@ -3,7 +3,7 @@
 ClrMD is a .Net library used to collect information from a live process or a memory dump file. It's like Windbg/sos.dll,
 but instead of cryptic commands you get a fully object oriented API to collect and combine data.
 
-Here is some resources to get you started:
+Here are some resources to get you started:
  - http://blogs.msdn.com/b/dotnet/archive/2013/05/01/net-crash-dump-and-live-process-inspection.aspx
  - https://github.com/Microsoft/clrmd
 
