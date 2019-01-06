@@ -1,5 +1,6 @@
 using ClrMD.Extensions.Core;
 using ClrMD.Extensions.Obfuscation;
+using Microsoft.Diagnostics.Runtime;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
