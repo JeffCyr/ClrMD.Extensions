@@ -77,11 +77,6 @@ namespace ClrMD.Extensions
 
             try
             {
-                bool really64Bit = IsClrModule64Bit(target);
-
-                if (!really64Bit && target.Architecture == Architecture.Amd64)
-                    throw new InvalidOperationException("Invalid dump file. The dump was taken from a process with the wrong architecture. (e.g. Creating a dump of a x86 process from the x64 taskmgr.exe)");
-
                 if (target.Architecture == Architecture.X86 && Environment.Is64BitProcess ||
                     target.Architecture == Architecture.Amd64 && !Environment.Is64BitProcess)
                 {
@@ -96,16 +91,6 @@ namespace ClrMD.Extensions
 
             s_lastDumpPath = dumpPath;
             return new ClrMDSession(target, dacFile);
-        }
-
-        private static bool IsClrModule64Bit(DataTarget target)
-        {
-            var clrModule = target.EnumerateModules().FirstOrDefault(item => "clr.dll".Equals(Path.GetFileName(item.FileName), StringComparison.OrdinalIgnoreCase));
-
-            if (clrModule == null)
-                throw new InvalidOperationException("Unable to find clr.dll module in dump file.");
-
-            return clrModule.FileName.IndexOf("Framework64", StringComparison.OrdinalIgnoreCase) != -1;
         }
 
         public static ClrMDSession AttachToProcess(string processName, uint millisecondsTimeout = 5000, AttachFlag attachFlag = AttachFlag.Invasive)
