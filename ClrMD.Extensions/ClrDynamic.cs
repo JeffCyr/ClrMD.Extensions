@@ -523,6 +523,16 @@ namespace ClrMD.Extensions
             return true;
         }
 
+        public override bool TryConvert(ConvertBinder binder, out object result)
+        {
+            result = null;
+            if (!HasSimpleValue)
+                return base.TryConvert(binder, out result);
+
+            result = Convert.ChangeType(SimpleValue, binder.ReturnType);
+            return true;
+        }
+
         #endregion
 
         #region ToString
