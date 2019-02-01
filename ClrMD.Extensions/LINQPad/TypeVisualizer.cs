@@ -37,7 +37,6 @@ namespace ClrMD.Extensions.LINQPad
             m_regexVisualizers.Add(new KeyValuePair<Regex, TypeVisualizer>(new Regex(typeName, RegexOptions.Compiled), visualizer));
         }
 
-
         public static TypeVisualizer TryGetVisualizer(ClrDynamic o)
         {
             TypeVisualizer visualizer;
@@ -53,7 +52,6 @@ namespace ClrMD.Extensions.LINQPad
             if (m_visualizers.TryGetValue(name, out visualizer))
                 return visualizer;
 
-
             foreach (var keyValuePair in m_regexVisualizers)
             {
                 if (keyValuePair.Key.IsMatch(name))
@@ -68,15 +66,20 @@ namespace ClrMD.Extensions.LINQPad
         public abstract object GetValue(ClrDynamic o);
     }
 
+    public interface ISingleCellEnumerableVisual
+    {
+        int Count { get; }
+        IEnumerable<ClrDynamic> Items { get; }
+    }
+
     public class QueueVisualizer : TypeVisualizer
     {
-        public class QueueVisual
+        public class QueueVisual : ISingleCellEnumerableVisual
         {
             public int Count { get; set; }
 
             public IEnumerable<ClrDynamic> Items { get; set; }
         }
-
 
         public override object GetValue(ClrDynamic o)
         {
@@ -106,7 +109,7 @@ namespace ClrMD.Extensions.LINQPad
 
     public class ListVisualizer : TypeVisualizer
     {
-        public class ListVisual
+        public class ListVisual : ISingleCellEnumerableVisual
         {
             public int Count { get; set; }
 

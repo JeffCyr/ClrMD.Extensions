@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Dynamic;
 using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using ClrMD.Extensions.Core;
 using ClrMD.Extensions.LINQPad;
 using ClrMD.Extensions.Obfuscation;
 using LINQPad;
@@ -267,6 +267,42 @@ namespace ClrMD.Extensions
             }
         }
 
+        public T[] ToArray<T>()
+        {
+            return (T[]) ToArray(typeof(T));
+        }
+
+        public Array ToArray(Type elemType)
+        {
+            int itemCount;
+            IEnumerable<ClrDynamic> items;
+
+            if (Type.IsArray)
+            {
+                itemCount = ArrayLength;
+                items = this;
+            }
+            else
+            {
+                var visual = Visualizer;
+                if (!(visual is ISingleCellEnumerableVisual simpleVisual))
+                    throw new InvalidOperationException("This is only valid on simple enumerable types");
+
+                itemCount = simpleVisual.Count;
+                items = simpleVisual.Items;
+            }
+
+
+            var array = Array.CreateInstance(elemType, itemCount);
+            int i = 0;
+            foreach (var val in items)
+            {
+                array.SetValue(val.ConvertContent(elemType), i++);
+            }
+
+            return array;
+        }
+
         private ClrDynamic GetInnerObject(ulong pointer, ClrType type)
         {
             ulong fieldAddress;
@@ -525,12 +561,30 @@ namespace ClrMD.Extensions
 
         public override bool TryConvert(ConvertBinder binder, out object result)
         {
-            result = null;
-            if (!HasSimpleValue)
-                return base.TryConvert(binder, out result);
-
-            result = Convert.ChangeType(SimpleValue, binder.ReturnType);
+            result = ConvertContent(binder.ReturnType);
             return true;
+        }
+
+        private object ConvertContent(Type targetType)
+        {
+            if (!HasSimpleValue)
+            {
+                if (targetType.IsArray)
+                    return ToArray(targetType.GetElementType());
+
+                throw new InvalidOperationException($"{targetType.FullName} cannot be converted from {Type.Name}");
+            }
+
+            return ConvertValue(SimpleValue, targetType);
+        }
+
+        private static object ConvertValue(object simpleValue, Type targetType)
+        {
+            if (!targetType.IsEnum)
+                return Convert.ChangeType(simpleValue, targetType);
+
+            simpleValue = Convert.ChangeType(simpleValue, Enum.GetUnderlyingType(targetType));
+            return Enum.ToObject(targetType, simpleValue);
         }
 
         #endregion
@@ -629,187 +683,6 @@ namespace ClrMD.Extensions
                     {
                         fieldValue.ToDetailedString(builder, indentation + ToStringFieldIndentation, true);
                     }
-                }
-            }
-        }
-
-        #endregion
-
-        #region SimpleValueHelper
-
-        private static class SimpleValueHelper
-        {
-            private const string GuidTypeName = "System.Guid";
-            private const string TimeSpanTypeName = "System.TimeSpan";
-            private const string DateTimeTypeName = "System.DateTime";
-            private const string IPAddressTypeName = "System.Net.IPAddress";
-
-            public static bool IsSimpleValue(ClrType type)
-            {
-                if (type.IsPrimitive ||
-                    type.IsString)
-                    return true;
-
-                switch (type.Name)
-                {
-                    case GuidTypeName:
-                    case TimeSpanTypeName:
-                    case DateTimeTypeName:
-                    case IPAddressTypeName:
-                        return true;
-                }
-
-                return false;
-            }
-
-            public static object GetSimpleValue(ClrDynamic obj)
-            {
-                if (obj.IsNull())
-                    return null;
-
-                ClrType type = obj.Type;
-                ClrHeap heap = type.Heap;
-
-                if (type.IsPrimitive || type.IsString)
-                    return type.GetValue(obj.Address);
-
-                ulong address = obj.IsInterior ? obj.Address : obj.Address + (ulong)heap.PointerSize;
-
-                switch (type.Name)
-                {
-                    case GuidTypeName:
-                        {
-                            byte[] buffer = ReadBuffer(heap, address, 16);
-                            return new Guid(buffer);
-                        }
-
-                    case TimeSpanTypeName:
-                        {
-                            byte[] buffer = ReadBuffer(heap, address, 8);
-                            long ticks = BitConverter.ToInt64(buffer, 0);
-                            return new TimeSpan(ticks);
-                        }
-
-                    case DateTimeTypeName:
-                        {
-                            byte[] buffer = ReadBuffer(heap, address, 8);
-                            ulong dateData = BitConverter.ToUInt64(buffer, 0);
-                            return GetDateTime(dateData);
-                        }
-
-                    case IPAddressTypeName:
-                        {
-                            return GetIPAddress(obj);
-                        }
-                }
-
-                throw new InvalidOperationException(string.Format("SimpleValue not available for type '{0}'", type.Name));
-            }
-
-            public static string GetSimpleValueString(ClrDynamic obj)
-            {
-                object value = obj.SimpleValue;
-
-                if (value == null)
-                    return "{null}";
-
-                ClrType type = obj.Type;
-                if (type != null && type.IsEnum)
-                    return type.GetEnumName(value) ?? value.ToString();
-
-                DateTime? dateTime = value as DateTime?;
-                if (dateTime != null)
-                    return GetDateTimeString(dateTime.Value);
-
-                return value.ToString();
-            }
-
-            private static byte[] ReadBuffer(ClrHeap heap, ulong address, int length)
-            {
-                byte[] buffer = new byte[length];
-                int byteRead = heap.ReadMemory(address, buffer, 0, buffer.Length);
-
-                if (byteRead != length)
-                    throw new InvalidOperationException(string.Format("Expected to read {0} bytes and actually read {1}", length, byteRead));
-
-                return buffer;
-            }
-
-            private static DateTime GetDateTime(ulong dateData)
-            {
-                const ulong DateTimeTicksMask = 0x3FFFFFFFFFFFFFFF;
-                const ulong DateTimeKindMask = 0xC000000000000000;
-                const ulong KindUnspecified = 0x0000000000000000;
-                const ulong KindUtc = 0x4000000000000000;
-
-                long ticks = (long)(dateData & DateTimeTicksMask);
-                ulong internalKind = dateData & DateTimeKindMask;
-
-                switch (internalKind)
-                {
-                    case KindUnspecified:
-                        return new DateTime(ticks, DateTimeKind.Unspecified);
-
-                    case KindUtc:
-                        return new DateTime(ticks, DateTimeKind.Utc);
-
-                    default:
-                        return new DateTime(ticks, DateTimeKind.Local);
-                }
-            }
-
-            private static IPAddress GetIPAddress(ClrDynamic ipAddress)
-            {
-                const int AddressFamilyInterNetworkV6 = 23;
-                const int IPv4AddressBytes = 4;
-                const int IPv6AddressBytes = 16;
-                const int NumberOfLabels = IPv6AddressBytes / 2;
-
-                byte[] bytes;
-                int family = (int)ipAddress["m_Family"].SimpleValue;
-
-                if (family == AddressFamilyInterNetworkV6)
-                {
-                    bytes = new byte[IPv6AddressBytes];
-                    int j = 0;
-
-                    var numbers = ipAddress["m_Numbers"];
-
-                    for (int i = 0; i < NumberOfLabels; i++)
-                    {
-                        ushort number = (ushort)numbers[i].SimpleValue;
-                        bytes[j++] = (byte)((number >> 8) & 0xFF);
-                        bytes[j++] = (byte)(number & 0xFF);
-                    }
-                }
-                else
-                {
-                    long address = (long)ipAddress["m_Address"].SimpleValue;
-                    bytes = new byte[IPv4AddressBytes];
-                    bytes[0] = (byte)(address);
-                    bytes[1] = (byte)(address >> 8);
-                    bytes[2] = (byte)(address >> 16);
-                    bytes[3] = (byte)(address >> 24);
-                }
-
-                return new IPAddress(bytes);
-            }
-
-            private static string GetDateTimeString(DateTime dateTime)
-            {
-                return dateTime.ToString(@"yyyy-MM-dd HH\:mm\:ss.FFFFFFF") + GetDateTimeKindString(dateTime.Kind);
-            }
-
-            private static string GetDateTimeKindString(DateTimeKind kind)
-            {
-                switch (kind)
-                {
-                    case DateTimeKind.Unspecified:
-                        return " (Unspecified)";
-                    case DateTimeKind.Utc:
-                        return " (Utc)";
-                    default:
-                        return " (Local)";
                 }
             }
         }
