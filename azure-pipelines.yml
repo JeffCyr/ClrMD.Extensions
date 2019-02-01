@@ -6,6 +6,9 @@
 trigger:
 - master
 
+pr:
+- master
+
 pool:
   vmImage: 'VS2017-Win2016'
 
@@ -15,14 +18,33 @@ variables:
   buildConfiguration: 'Release'
 
 steps:
-- task: NuGetToolInstaller@0
-
-- task: NuGetCommand@2
+- task: DotNetCoreCLI@2
+  displayName: Install NBGV tool
   inputs:
-    restoreSolution: '$(solution)'
+    command: custom
+    custom: tool
+    arguments: install --tool-path . nbgv
 
-- task: VSBuild@1
+- script: nbgv cloud
+  displayName: Set Version
+
+- task: DotNetCoreCLI@2
+  displayName: Build
   inputs:
-    solution: '$(solution)'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    command: pack
+    packagesToPack: ./ClrMD.Extensions/ClrMD.Extensions.csproj"
+    packDirectory: $(Build.ArtifactStagingDirectory)\Packages
+    configuration: $(BuildConfiguration)
+
+- task: PublishBuildArtifacts@1
+  displayName: Publish Package Artifacts
+  inputs:
+    pathToPublish: $(Build.ArtifactStagingDirectory)\Packages
+    artifactType: container
+    artifactName: Packages
+
+- task: PublishBuildArtifacts@1
+  displayName: Publish Package Artifacts
+  inputs:
+    artifactName: Packages
+    publishLocation: Container

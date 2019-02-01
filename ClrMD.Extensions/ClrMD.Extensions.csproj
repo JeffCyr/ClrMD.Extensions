@@ -4,7 +4,6 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 
     <Title>ClrMD.Extensions (LINQ to Memory Dump)</Title>
     <Description>Provides multiple ClrMD enhancements including LINQPad integration.</Description>
