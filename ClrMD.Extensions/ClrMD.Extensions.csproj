@@ -12,21 +12,14 @@
     <Version>1.0.0</Version>
     <Authors>Jeff Cyr</Authors>
     <Copyright>© Jeff Cyr</Copyright>
-    <PackageLicenseUrl>https://github.com/JeffCyr/ClrMD.Extensions/blob/master/LICENSE</PackageLicenseUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/JeffCyr/ClrMD.Extensions</PackageProjectUrl>
     <RepositoryUrl>https://github.com/JeffCyr/ClrMD.Extensions</RepositoryUrl>
-
-    <PackageReleaseNotes>
-      - Upgraded to Microsoft.Diagnostics.Runtime 1.0.2
-      - Null display enhancements (#13)
-      - TypeName struct now supports array types properly (#14)
-      - Fixed type deobfuscation (#15)
-    </PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.Runtime" Version="1.0.2" />
-    <PackageReference Include="Microsoft.CSharp" Version="4.5.0" />
+    <PackageReference Include="Microsoft.CSharp" Version="4.5.0" PrivateAssets="All" />
   </ItemGroup>
 
 </Project>
