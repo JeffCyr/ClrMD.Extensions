@@ -565,7 +565,7 @@ namespace ClrMD.Extensions
             return true;
         }
 
-        private object ConvertContent(Type targetType)
+        public object ConvertContent(Type targetType)
         {
             if (!HasSimpleValue)
             {

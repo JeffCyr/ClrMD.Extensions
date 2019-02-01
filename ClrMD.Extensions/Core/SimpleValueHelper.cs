@@ -17,7 +17,7 @@ namespace ClrMD.Extensions.Core
             private SimpleValueHandler(Func<ClrDynamic, ulong, object> simpleValueExtractor, Func<object, string> stringFormatter = null)
             {
                 GetSimpleValue = simpleValueExtractor;
-                GetSimpleValueString = stringFormatter;
+                GetSimpleValueString = stringFormatter ?? (o => o?.ToString());
             }
 
             public static SimpleValueHandler Create<T>(Func<ClrDynamic, ulong, T> valueExtractor, Func<T, string> formatter = null)
@@ -43,7 +43,7 @@ namespace ClrMD.Extensions.Core
 
         private static string ExtractString(ClrDynamic obj, ulong address)
         {
-            return (string)obj.Type.GetValue(address);
+            return (string) obj.Type.GetValue(obj.Address);
         }
 
         private static DnsEndPoint ExtractDnsEndPoint(ClrDynamic obj, ulong address)
