@@ -4,7 +4,7 @@
 It's free to use but I encourage you to buy a license for the autocompletion.
 
 ClrMD combined with LINQPad does not totally replace a full blown memory profiler, but once you get started
-I garantee you will rarely open a classic memory profiler again. Investigating dumps and memory issue can be
+I guarantee you will rarely open a classic memory profiler again. Investigating dumps and memory issue can be
 a boring and tedious task, but now you can code your way to the solution!
 
 ## Install LINQPad (x86 & x64)
@@ -23,6 +23,8 @@ If you don’t use the corresponding architecture, you will get this error:
 
 In "Query properties", add the nuget package
 - ClrMD.Extensions
+
+> Note: Adding nuget packages is not available in the free version of LinQPad. If purchasing a license is not an option you can download the package separately add the assemblies manually.
 
 Include these namespaces in the “Additional Namespace Imports” tab:
 - ClrMD.Extensions
