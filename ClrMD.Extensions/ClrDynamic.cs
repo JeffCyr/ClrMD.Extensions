@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using ClrMD.Extensions.Core;
 using ClrMD.Extensions.LINQPad;
 using ClrMD.Extensions.Obfuscation;
 using LINQPad;
@@ -14,7 +15,7 @@ using Microsoft.Diagnostics.Runtime;
 
 namespace ClrMD.Extensions
 {
-    public class ClrDynamic : DynamicObject, IEnumerable<ClrDynamic>, IComparable, ICustomMemberProvider
+    public class ClrDynamic : DynamicObject, IEnumerable<ClrDynamic>, IComparable, ICustomMemberProvider, IConvertible
     {
         public const ulong NullAddress = 0;
         private const string ToStringFieldIndentation = "  ";
@@ -25,7 +26,7 @@ namespace ClrMD.Extensions
         public ulong Address { get; }
 
         public ClrType Type { get; }
-        
+
         public bool IsInterior { get; }
 
         public string TypeName => m_deobfuscator.OriginalName;
@@ -364,131 +365,69 @@ namespace ClrMD.Extensions
             return Comparer.DefaultInvariant.Compare(left, right) <= 0;
         }
 
+        #region Explicit Casts 
+
         public static bool operator true(ClrDynamic obj)
         {
             if (obj == null)
                 throw new ArgumentNullException("obj");
 
-            if (obj.HasSimpleValue)
-                return (bool)obj.SimpleValue;
-
-            throw new InvalidCastException(string.Format("Cannot cast type '{0}' to bool.", obj.Type));
+            return (bool)obj;
         }
 
         public static bool operator false(ClrDynamic obj)
         {
-            if (obj == null)
-                throw new ArgumentNullException("obj");
-
-            if (obj.HasSimpleValue)
-                return !(bool)obj.SimpleValue;
-
-            throw new InvalidCastException(string.Format("Cannot cast type '{0}' to bool.", obj.Type));
+            return !obj;
         }
 
         public static bool operator !(ClrDynamic obj)
         {
             if (obj == null)
                 throw new ArgumentNullException("obj");
-
             if (obj.HasSimpleValue)
                 return !(bool)obj.SimpleValue;
 
             throw new InvalidCastException(string.Format("Cannot cast type '{0}' to bool.", obj.Type));
         }
 
-        public static explicit operator bool(ClrDynamic obj)
-        {
-            return (bool)obj.SimpleValue;
-        }
-
-        public static explicit operator char(ClrDynamic obj)
-        {
-            return (char)obj.SimpleValue;
-        }
-
-        public static explicit operator sbyte(ClrDynamic obj)
-        {
-            return (sbyte)obj.SimpleValue;
-        }
-
-        public static explicit operator byte(ClrDynamic obj)
-        {
-            return (byte)obj.SimpleValue;
-        }
-
-        public static explicit operator short(ClrDynamic obj)
-        {
-            return (short)obj.SimpleValue;
-        }
-
-        public static explicit operator ushort(ClrDynamic obj)
-        {
-            return (ushort)obj.SimpleValue;
-        }
-
-        public static explicit operator int(ClrDynamic obj)
-        {
-            return (int)obj.SimpleValue;
-        }
-
-        public static explicit operator uint(ClrDynamic obj)
-        {
-            return (uint)obj.SimpleValue;
-        }
-
-        public static explicit operator long(ClrDynamic obj)
-        {
-            return (long)obj.SimpleValue;
-        }
-
-        public static explicit operator ulong(ClrDynamic obj)
-        {
-            return (ulong)obj.SimpleValue;
-        }
-
-        public static explicit operator float(ClrDynamic obj)
-        {
-            return (float)obj.SimpleValue;
-        }
-
-        public static explicit operator double(ClrDynamic obj)
-        {
-            return (double)obj.SimpleValue;
-        }
+        public static explicit operator bool(ClrDynamic obj) => Convert.ToBoolean(obj.SimpleValue);
+        public static explicit operator char(ClrDynamic obj) => Convert.ToChar(obj.SimpleValue);
+        public static explicit operator sbyte(ClrDynamic obj) => Convert.ToSByte(obj.SimpleValue);
+        public static explicit operator byte(ClrDynamic obj) => Convert.ToByte(obj.SimpleValue);
+        public static explicit operator short(ClrDynamic obj) => Convert.ToInt16(obj.SimpleValue);
+        public static explicit operator ushort(ClrDynamic obj) => Convert.ToUInt16(obj.SimpleValue);
+        public static explicit operator int(ClrDynamic obj) => Convert.ToInt32(obj.SimpleValue);
+        public static explicit operator uint(ClrDynamic obj) => Convert.ToUInt32(obj.SimpleValue);
+        public static explicit operator long(ClrDynamic obj) => Convert.ToInt64(obj.SimpleValue);
+        public static explicit operator ulong(ClrDynamic obj) => Convert.ToUInt64(obj.SimpleValue);
+        public static explicit operator float(ClrDynamic obj) => Convert.ToSingle(obj.SimpleValue);
+        public static explicit operator double(ClrDynamic obj) => Convert.ToDouble(obj.SimpleValue);
+        public static explicit operator DateTime(ClrDynamic obj) => Convert.ToDateTime(obj.SimpleValue);
+        public static explicit operator decimal(ClrDynamic obj) => Convert.ToDecimal(obj.SimpleValue);
+        public static explicit operator TimeSpan(ClrDynamic obj) => (TimeSpan)obj.SimpleValue;
+        public static explicit operator ClrDynamic(ClrObject obj) => new ClrDynamic(obj);
 
         public static explicit operator string(ClrDynamic obj)
         {
-            if (obj.Type.IsEnum)
-                return obj.Type.GetEnumName(obj.SimpleValue);
-
-            return (string)obj.SimpleValue;
+            return obj.Type.IsEnum
+                ? obj.Type.GetEnumName(obj.SimpleValue)
+                : Convert.ToString(obj.SimpleValue);
         }
 
         public static explicit operator Guid(ClrDynamic obj)
         {
-            return (Guid)obj.SimpleValue;
-        }
-
-        public static explicit operator TimeSpan(ClrDynamic obj)
-        {
-            return (TimeSpan)obj.SimpleValue;
-        }
-
-        public static explicit operator DateTime(ClrDynamic obj)
-        {
-            return (DateTime)obj.SimpleValue;
+            if (obj.SimpleValue is Guid g)
+                return g;
+            return new Guid((string)obj);
         }
 
         public static explicit operator IPAddress(ClrDynamic obj)
         {
-            return (IPAddress)obj.SimpleValue;
+            if (obj.SimpleValue is IPAddress ip)
+                return ip;
+            return IPAddress.Parse((string)obj);
         }
-
-        public static explicit operator ClrDynamic(ClrObject obj)
-        {
-            return new ClrDynamic(obj);
-        }
+        #endregion
 
         #endregion
 
@@ -583,7 +522,7 @@ namespace ClrMD.Extensions
         {
             if (Address == NullAddress)
                 return "{null}";
-            
+
             return "0x" + Address.ToString("X");
         }
 
@@ -631,6 +570,32 @@ namespace ClrMD.Extensions
                     }
                 }
             }
+        }
+
+        #endregion
+
+        #region IConvertible (for System.Convert methods)
+
+        TypeCode IConvertible.GetTypeCode() => Type.GetTypeCode();
+        bool IConvertible.ToBoolean(IFormatProvider provider) => (bool)this;
+        byte IConvertible.ToByte(IFormatProvider provider) => (byte)this;
+        char IConvertible.ToChar(IFormatProvider provider) => (char)this;
+        DateTime IConvertible.ToDateTime(IFormatProvider provider) => (DateTime)this;
+        decimal IConvertible.ToDecimal(IFormatProvider provider) => (decimal)this;
+        double IConvertible.ToDouble(IFormatProvider provider) => (double)this;
+        short IConvertible.ToInt16(IFormatProvider provider) => (short)this;
+        int IConvertible.ToInt32(IFormatProvider provider) => (int)this;
+        long IConvertible.ToInt64(IFormatProvider provider) => (long)this;
+        sbyte IConvertible.ToSByte(IFormatProvider provider) => (sbyte)this;
+        float IConvertible.ToSingle(IFormatProvider provider) => (float)this;
+        string IConvertible.ToString(IFormatProvider provider) => (string)this;
+        ushort IConvertible.ToUInt16(IFormatProvider provider) => (ushort)this;
+        uint IConvertible.ToUInt32(IFormatProvider provider) => (uint)this;
+        ulong IConvertible.ToUInt64(IFormatProvider provider) => (ulong)this;
+
+        public object ToType(Type conversionType, IFormatProvider provider)
+        {
+            return Convert.ChangeType(SimpleValue, conversionType, provider);
         }
 
         #endregion
@@ -825,7 +790,7 @@ namespace ClrMD.Extensions
                 yield return "";
                 yield break;
             }
-            
+
             if (Type.IsArray)
             {
                 yield return "[Type]";
@@ -867,10 +832,10 @@ namespace ClrMD.Extensions
 
             if (HasSimpleValue)
             {
-                 yield return GetSimpleValueType();
+                yield return GetSimpleValueType();
                 yield break;
             }
-            
+
             if (Type.IsArray)
             {
                 // Type Name
@@ -935,7 +900,7 @@ namespace ClrMD.Extensions
                 yield return SimpleDisplayValue;
                 yield break;
             }
-            
+
             if (Type.IsArray)
             {
                 yield return m_deobfuscator.OriginalName;
@@ -981,9 +946,9 @@ namespace ClrMD.Extensions
         private Type GetSimpleValueType()
         {
             if (SimpleValue == null)
-                return typeof (object);
+                return typeof(object);
             if (Type.IsEnum)
-                return typeof (string);
+                return typeof(string);
             return SimpleValue.GetType();
         }
 
