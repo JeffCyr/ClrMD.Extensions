@@ -27,13 +27,13 @@ namespace ClrMD.Extensions
 
         public static IEnumerable<ClrDynamic> EnumerateDynamicObjects(this ClrHeap heap)
         {
-            return from address in heap.EnumerateObjectAddresses()
+            return from address in heap.EnumerateObjects().Select(f => f.Address)
                    select heap.GetDynamicObject(address);
         }
 
         public static IEnumerable<ClrDynamic> EnumerateDynamicObjects(this ClrHeap heap, ClrType type)
         {
-            return from address in heap.EnumerateObjectAddresses()
+            return from address in heap.EnumerateObjects().Select(f => f.Address)
                    let objectType = heap.GetSafeObjectType(address)
                    where objectType == type
                    select new ClrDynamic(address, type);
@@ -59,7 +59,7 @@ namespace ClrMD.Extensions
 
             HashSet<ClrType> set = new HashSet<ClrType>(castedTypes);
 
-            return from address in heap.EnumerateObjectAddresses()
+            return from address in heap.EnumerateObjects().Select(f => f.Address)
                    let type = heap.GetSafeObjectType(address)
                    where set.Contains(type)
                    select new ClrDynamic(address, type);
@@ -67,10 +67,16 @@ namespace ClrMD.Extensions
 
         public static IEnumerable<ClrDynamic> EnumerateDynamicObjects(this ClrHeap heap, string typeName)
         {
+            var heapTypes = heap.EnumerateTypes();
+                //(from objects in heap.EnumerateObjects()
+            //group objects by objects.Type into tn 
+            // select (tn.Key)
+            //);
+
             if (!typeName.Contains("*"))
             {
                 var type = 
-                    (from t in heap.EnumerateTypes()
+                    (from t in heapTypes
                     let deobfuscator = ClrMDSession.Current.GetTypeDeobfuscator(t)
                     where deobfuscator.OriginalName == typeName
                     select t).First();
@@ -82,7 +88,7 @@ namespace ClrMD.Extensions
                 RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
             var types = 
-                from type in heap.EnumerateTypes()
+                from type in heapTypes
                 let deobfuscator = ClrMDSession.Current.GetTypeDeobfuscator(type)
                 where regex.IsMatch(deobfuscator.OriginalName)
                 select type;
@@ -107,10 +113,10 @@ namespace ClrMD.Extensions
         {
             List<StackFrameInfo> stackframes = new List<StackFrameInfo>();
 
-            List<ClrRoot> stackObjects = thread.EnumerateStackObjects().ToList();
+            List<IClrStackRoot> stackObjects = thread.EnumerateStackRoots().ToList(); 
 
             ulong lastAddress = 0;
-            foreach (ClrStackFrame frame in thread.StackTrace)
+            foreach (ClrStackFrame frame in thread.EnumerateStackTrace())
             {
                 ClrStackFrame f = frame;
                 List<ClrDynamic> objectsInFrame = stackObjects
@@ -121,7 +127,7 @@ namespace ClrMD.Extensions
 
                 stackframes.Add(new StackFrameInfo
                 {
-                    Function = f.DisplayString,
+                    Function = f.Method.Name,
                     Objects = objectsInFrame
                 });
 
@@ -134,10 +140,18 @@ namespace ClrMD.Extensions
         public static string GetStackTrace(this ClrThread thread)
         {
             StringBuilder builder = new StringBuilder();
+            int count = 0;
+            foreach (ClrStackFrame frame in thread.EnumerateStackTrace())
+            {
 
-            foreach (ClrStackFrame frame in thread.StackTrace)
-                builder.AppendLine(frame.DisplayString);
+                if (frame != null)
+                    builder.AppendLine($"{frame}");
 
+                count++;
+                if (count == 100) break;
+            }
+
+            
             string stack = builder.ToString();
             return ClrMDSession.Current.DeobfuscateStack(stack);
         }
@@ -171,6 +185,8 @@ namespace ClrMD.Extensions
 
             return containingType;
         }
+
+
     }
 
     public class ClrObjectWrapper
@@ -185,6 +201,41 @@ namespace ClrMD.Extensions
         public ClrObjectWrapper(ClrDynamic item)
         {
             Object = item;
+        }
+    }
+
+    public static class EnumerateTypesExtension
+    {
+        /// <summary>
+        /// Enumerates types with constructed method tables in all modules.
+        /// </summary>
+        /// <param name="heap"></param>
+        /// <returns></returns>
+
+//this is in clrmd master branch but didn't seem to be published in the nuget yet, so I added it here.
+        public static IEnumerable<ClrType> EnumerateTypes(this ClrHeap heap)
+        {
+            if (heap is null)
+                throw new ArgumentNullException(nameof(heap));
+
+            // The ClrHeap actually doesn't know anything about 'types' in the strictest sense, that's
+            // all tracked by the runtime.  First, grab the runtime object:
+
+            ClrRuntime runtime = heap.Runtime;
+
+            // Now we loop through every module and grab every constructed MethodTable
+            foreach (ClrModule module in runtime.EnumerateModules())
+            {
+                foreach ((ulong mt, int _) in module.EnumerateTypeDefToMethodTableMap())
+                {
+                    // Now try to construct a type for mt.  This may fail if the type was only partially
+                    // loaded, dump inconsistency, and in some odd corner cases like transparent proxies:
+                    ClrType type = runtime.GetTypeByMethodTable(mt);
+
+                    if (type != null)
+                        yield return type;
+                }
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Dynamic;
 using System.Linq;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using ClrMD.Extensions.LINQPad;
@@ -60,7 +61,8 @@ namespace ClrMD.Extensions
                 if (!Type.IsArray)
                     throw new InvalidOperationException(string.Format("Type '{0}' is not an array", Type.Name));
 
-                int arrayLength = Type.GetArrayLength(Address);
+                //int arrayLength = Type.GetArrayLength(Address);
+                int arrayLength = Heap.GetObject(Address).AsArray().Length;
 
                 if (arrayIndex >= arrayLength)
                     throw new IndexOutOfRangeException(string.Format("Array index '{0}' is not between 0 and '{1}'", arrayIndex, arrayLength));
@@ -78,7 +80,8 @@ namespace ClrMD.Extensions
                 if (!Type.IsArray)
                     throw new InvalidOperationException(string.Format("Type '{0}' is not an array", Type.Name));
 
-                return Type.GetArrayLength(Address);
+                //return Type.GetArrayLength(Address);
+                return Heap.GetObject(Address).AsArray().Length; ;
             }
         }
 
@@ -91,12 +94,14 @@ namespace ClrMD.Extensions
             get
             {
                 if (Type.IsEnum)
-                    return Type.GetEnumName(SimpleValue) ?? SimpleValue.ToString();
+                {
+                    return Type.AsEnum().EnumerateValues().FirstOrDefault(f => Convert.ToInt64(f.Value) == Convert.ToInt64(SimpleValue)).Name ?? SimpleValue.ToString();
+                }
                 return SimpleValue ?? "{null}";
             }
         }
 
-        public ulong Size => Type.GetSize(Address);
+        public ulong Size => Heap.GetObjectSize(Address, Type);
 
         public dynamic Dynamic => this;
 
@@ -130,8 +135,11 @@ namespace ClrMD.Extensions
 
         private static ClrInstanceField FindField(ObfuscatedField oField)
         {
-            TypeName delcaringType = ClrMDSession.Current.ObfuscateType(oField.DeclaringType);
-            var target = ClrMDSession.Current.Heap.GetTypeByName(delcaringType);
+            TypeName declaringType = ClrMDSession.Current.ObfuscateType(oField.DeclaringType);
+
+            var heapTypes = ClrMDSession.Current.Heap.EnumerateTypes();
+
+            var target = heapTypes.First(type => type.Name == declaringType);
             return target.GetFieldByName(oField.ObfuscatedName);
         }
 
@@ -239,10 +247,8 @@ namespace ClrMD.Extensions
 
         public IEnumerable<ulong> EnumerateReferencesAddress()
         {
-            List<ulong> references = new List<ulong>();
-
-            Type.EnumerateRefsOfObject(Address, (objRef, fieldOffset) => references.Add(objRef));
-            return references;
+            var refs = Heap.GetObject(Address).EnumerateReferences().Select(r => r.Address);
+            return refs;
         }
 
         public IEnumerable<ClrDynamic> EnumerateDictionaryValues()
@@ -274,8 +280,8 @@ namespace ClrMD.Extensions
 
             if (type.IsObjectReference)
             {
-                Type.Heap.ReadPointer(pointer, out fieldAddress);
-
+                Type.Heap.Runtime.DataTarget.DataReader.ReadPointer(pointer, out fieldAddress);
+                //Console.WriteLine(fieldAddress);
                 if (!type.IsSealed && fieldAddress != NullAddress)
                     actualType = type.Heap.GetSafeObjectType(fieldAddress);
             }
@@ -284,18 +290,19 @@ namespace ClrMD.Extensions
                 // Unfortunately, ClrType.GetValue for primitives assumes that the value is boxed,
                 // we decrement PointerSize because it will be added when calling ClrType.GetValue.
                 // ClrMD should be updated in a future version to include ClrType.GetValue(int interior).
-                fieldAddress = pointer - (ulong)type.Heap.PointerSize;
+                
+                fieldAddress = pointer - (ulong)type.Heap.Runtime.DataTarget.DataReader.PointerSize;
             }
-            else if (type.IsValueClass)
+            else if (type.IsValueType)
             {
                 fieldAddress = pointer;
             }
             else
             {
-                throw new NotSupportedException(string.Format("Object type not supported '{0}'", type.Name));
+                throw new NotSupportedException($"Object type not supported '{type.Name}'");
             }
 
-            return new ClrDynamic(fieldAddress, actualType, !type.IsObjectReference);
+            return new ClrDynamic(fieldAddress, actualType,!type.IsObjectReference);
         }
 
         #region Operators
@@ -305,7 +312,7 @@ namespace ClrMD.Extensions
             if (HasSimpleValue)
             {
                 if (other is string && Type.IsEnum)
-                    return Equals(other, Type.GetEnumName(SimpleValue));
+                    return Equals(other, Type.AsEnum().EnumerateValues().FirstOrDefault(f => Convert.ToInt64(f.Value) == Convert.ToInt64(SimpleValue)).Name);
 
                 return Equals(other, SimpleValue);
             }
@@ -460,7 +467,7 @@ namespace ClrMD.Extensions
         public static explicit operator string(ClrDynamic obj)
         {
             if (obj.Type.IsEnum)
-                return obj.Type.GetEnumName(obj.SimpleValue);
+                return obj.Type.AsEnum().EnumerateValues().FirstOrDefault(f => (int)f.Value == (int)obj.SimpleValue).Name;
 
             return (string)obj.SimpleValue;
         }
@@ -670,10 +677,92 @@ namespace ClrMD.Extensions
                 ClrType type = obj.Type;
                 ClrHeap heap = type.Heap;
 
-                if (type.IsPrimitive || type.IsString)
-                    return type.GetValue(obj.Address);
+                ulong unboxedAddress = obj.Address + (ulong)heap.Runtime.DataTarget.DataReader.PointerSize;
+                
+                switch (type.ElementType)
+                {
+                    case ClrElementType.String:
+                    {
+                        return heap.GetObject(obj.Address).AsString();
+                    }
 
-                ulong address = obj.IsInterior ? obj.Address : obj.Address + (ulong)heap.PointerSize;
+                    case ClrElementType.Boolean:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<bool>(unboxedAddress);
+                    }
+
+                    case ClrElementType.Int8:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<byte>(unboxedAddress);
+                    }
+
+                    case ClrElementType.Int16:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<short>(unboxedAddress);
+                    }
+
+                    case ClrElementType.Int32:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<int>(unboxedAddress);
+                    }
+
+                    case ClrElementType.Int64:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<long>(unboxedAddress);
+                    }
+
+                    case ClrElementType.UInt8:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<sbyte>(unboxedAddress);
+                    }
+                    case ClrElementType.UInt16:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<ushort>(unboxedAddress);
+                    }
+
+                    case ClrElementType.UInt32:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<uint>(unboxedAddress);
+                    }
+
+                    case ClrElementType.UInt64:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<ulong>(unboxedAddress);
+                    }
+
+                    case ClrElementType.NativeInt:
+                    {
+                        heap.Runtime.DataTarget.DataReader.ReadPointer(unboxedAddress, out var value);
+                        return (long)value;
+                    }
+
+                    case ClrElementType.FunctionPointer:
+                    case ClrElementType.Pointer:
+                    case ClrElementType.NativeUInt:
+                    {
+                        heap.Runtime.DataTarget.DataReader.ReadPointer(unboxedAddress, out var value);
+                        return value;
+                    }
+
+                    case ClrElementType.Float:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<float>(unboxedAddress);
+                    }
+
+                    case ClrElementType.Double:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<double>(unboxedAddress);
+                    }
+
+                    case ClrElementType.Char:
+                    {
+                        return heap.Runtime.DataTarget.DataReader.Read<char>(unboxedAddress);
+                    }
+
+
+                }
+
+                ulong address = obj.IsInterior ? obj.Address : obj.Address + (ulong)heap.Runtime.DataTarget.DataReader.PointerSize;
 
                 switch (type.Name)
                 {
@@ -715,7 +804,7 @@ namespace ClrMD.Extensions
 
                 ClrType type = obj.Type;
                 if (type != null && type.IsEnum)
-                    return type.GetEnumName(value) ?? value.ToString();
+                    return type.AsEnum().EnumerateValues().FirstOrDefault(f => Convert.ToInt64(value) == Convert.ToInt64(f.Value)).Name ?? value.ToString();
 
                 DateTime? dateTime = value as DateTime?;
                 if (dateTime != null)
@@ -726,13 +815,13 @@ namespace ClrMD.Extensions
 
             private static byte[] ReadBuffer(ClrHeap heap, ulong address, int length)
             {
-                byte[] buffer = new byte[length];
-                int byteRead = heap.ReadMemory(address, buffer, 0, buffer.Length);
+                Span<byte> buffer = new byte[length];
+                int byteRead = heap.Runtime.DataTarget.DataReader.Read(address, buffer);
 
                 if (byteRead != length)
                     throw new InvalidOperationException(string.Format("Expected to read {0} bytes and actually read {1}", length, byteRead));
 
-                return buffer;
+                return buffer.ToArray();
             }
 
             private static DateTime GetDateTime(ulong dateData)
