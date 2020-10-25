@@ -95,9 +95,9 @@ namespace ClrMD.Extensions.Obfuscation
             if (m_typeLookup.TryGetValue(type, out result))
                 return result;
 
-            if (type.Module != null && type.Module.IsFile)
+            if (type.Module != null && type.Module.IsPEFile)
             {
-                string moduleName = Path.GetFileName(type.Module.FileName);
+                string moduleName = Path.GetFileName(type.Module.AssemblyName);
                 var key = new TypeKey(moduleName, type.Name);
 
                 m_obfuscationMap.TryGetValue(key, out result);
